@@ -2,11 +2,9 @@
 
 Independent skin engine and generator for [Hermes Agent](https://github.com/NousResearch/hermes-agent) CLI.
 
-**Not a wrapper, not a fork.** Own schema, own color-theory engine, own generators. Built from scratch.
-
 ## Features
 
-- 🎨 **Color-theory palette engine** — generate 15-color palettes from a single base color using HSL harmony (complementary, analogous, triadic, monochrome, split-complementary)
+- 🎨 **Color-theory palette engine** — generate 29-color palettes from a single base color using HSL harmony (complementary, analogous, triadic, monochrome, split-complementary)
 - 🎭 **8 built-in Evangelion theme templates** — Asuka, Rei, Shinji, Misato, Kaworu, NERV, Berserk, SEELE
 - 🎲 **Random skin generator** — deterministic with seed support, or fully random
 - 🖥️ **Terminal preview** — see colors, spinners, branding, and banner art before installing
@@ -76,7 +74,7 @@ src/hermes_skins/
 
 ### Palette Engine
 
-The palette engine takes a single base color and a harmony type, then derives all 15 color slots:
+The palette engine takes a single base color and a harmony type, then derives all 29 Hermes-native color slots:
 
 ```
 base_color (#CC0033) + harmony=complementary
@@ -86,12 +84,13 @@ base_color (#CC0033) + harmony=complementary
   → bright (lightness + 0.25)
   → text (desaturated, high lightness)
   → semantic: ok=#00AA00, error=#CC0000, warn=#DDAA00
+  → status_bar (8 slots), voice_status, selection, completion_menu (4 slots)
 ```
 
 ### Schema
 
 A Skin contains:
-- **colors** — 15 named hex color slots (`banner_border`, `ui_accent`, `prompt`, etc.)
+- **colors** — 29 named hex color slots (`banner_border`, `ui_accent`, `prompt`, `status_bar_*`, `completion_menu_*`, etc.)
 - **spinner** — waiting/thinking faces, thinking verbs, wing decorations
 - **branding** — agent name, welcome/goodbye text, prompt symbol, response label
 - **tool_emojis** — per-tool icon mapping
