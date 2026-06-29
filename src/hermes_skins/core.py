@@ -19,7 +19,12 @@ from typing import Optional
 
 @dataclass
 class Colors:
-    """16 named color slots that map to TUI elements."""
+    """29 named color slots that map to Hermes TUI elements.
+
+    All Hermes-native color slots are supported so engine-generated skins
+    are fully compatible with the Hermes skin loader.
+    """
+    # Banner / general UI
     banner_border: str = "#333333"
     banner_title: str = "#FFFFFF"
     banner_accent: str = "#888888"
@@ -35,6 +40,26 @@ class Colors:
     response_border: str = "#666666"
     session_label: str = "#999999"
     session_border: str = "#333333"
+
+    # Status bar (TUI bottom bar)
+    status_bar_bg: str = "#1A1A2E"
+    status_bar_text: str = "#C0C0C0"
+    status_bar_strong: str = "#FFFFFF"
+    status_bar_dim: str = "#8B8682"
+    status_bar_good: str = "#8FBC8F"
+    status_bar_warn: str = "#FFD700"
+    status_bar_bad: str = "#FF8C00"
+    status_bar_critical: str = "#FF6B6B"
+
+    # Voice status (TUI voice mode indicator)
+    voice_status_bg: str = "#1A1A2E"
+
+    # TUI selection / completion menu
+    selection_bg: str = "#333355"
+    completion_menu_bg: str = "#1A1A2E"
+    completion_menu_current_bg: str = "#333355"
+    completion_menu_meta_bg: str = "#1A1A2E"
+    completion_menu_meta_current_bg: str = "#333355"
 
     @classmethod
     def from_dict(cls, d: dict) -> "Colors":

@@ -51,7 +51,7 @@ def adjust_saturation(hex_color: str, factor: float) -> str:
 
 def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
     """
-    Generate a complete Colors palette from a single base color.
+    Generate a complete 29-color palette from a single base color.
 
     Harmonies:
       - complementary:  base + opposite hue
@@ -93,6 +93,26 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
     error = "#CC0000"
     warn = "#DDAA00"
 
+    # Status bar — dark base surface with accent highlights
+    status_bg = hsl_to_hex(h, s * 0.3, max(0.08, l - 0.30))
+    status_text = hsl_to_hex(h, s * 0.2, 0.70)
+    status_strong = bright
+    status_dim = hsl_to_hex(h, s * 0.2, 0.45)
+    status_good = ok
+    status_warn = warn
+    status_bad = hsl_to_hex(h, min(1, s + 0.1), min(0.65, l + 0.10))
+    status_critical = error
+
+    # Voice status — same dark surface
+    voice_bg = status_bg
+
+    # TUI selection / completion menu
+    sel_bg = hsl_to_hex(h, s * 0.4, max(0.12, l - 0.25))
+    comp_bg = status_bg
+    comp_current = hsl_to_hex(h, s * 0.5, max(0.18, l - 0.18))
+    comp_meta = status_bg
+    comp_meta_current = comp_current
+
     return Colors(
         banner_border=dark,
         banner_title=accent,
@@ -109,6 +129,23 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
         response_border=accent,
         session_label=bright,
         session_border=dark,
+        # Status bar
+        status_bar_bg=status_bg,
+        status_bar_text=status_text,
+        status_bar_strong=status_strong,
+        status_bar_dim=status_dim,
+        status_bar_good=status_good,
+        status_bar_warn=status_warn,
+        status_bar_bad=status_bad,
+        status_bar_critical=status_critical,
+        # Voice
+        voice_status_bg=voice_bg,
+        # Selection / completion
+        selection_bg=sel_bg,
+        completion_menu_bg=comp_bg,
+        completion_menu_current_bg=comp_current,
+        completion_menu_meta_bg=comp_meta,
+        completion_menu_meta_current_bg=comp_meta_current,
     )
 
 
