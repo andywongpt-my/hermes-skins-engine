@@ -2,6 +2,8 @@
 
 Independent skin engine and generator for [Hermes Agent](https://github.com/NousResearch/hermes-agent) CLI.
 
+![Hermes Skins Preview](assets/hermes-skins-preview.png)
+
 ## Features
 
 - 🎨 **Color-theory palette engine** — generate 29-color palettes from a single base color using HSL harmony (complementary, analogous, triadic, monochrome, split-complementary)
