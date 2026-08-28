@@ -18,6 +18,9 @@ from __future__ import annotations
 import sys
 import re
 import shutil
+import time
+import urllib.error
+import urllib.request
 from enum import Enum
 from pathlib import Path
 
@@ -31,9 +34,28 @@ from .generators import (
     generate_random,
     generate_custom,
     list_templates,
+    contrast_ratio,
     THEMES,
 )
 from .preview import render_preview, _color_enabled, strip_ansi
+
+class Harmony(str, Enum):
+    complementary = "complementary"
+    analogous = "analogous"
+    triadic = "triadic"
+    monochrome = "monochrome"
+    split_comp = "split_comp"
+    # Extended harmonies (audit F11)
+    tetradic = "tetradic"
+    square = "square"
+    pastel = "pastel"
+    neon = "neon"
+
+
+class Mode(str, Enum):
+    dark = "dark"
+    light = "light"
+
 
 app = typer.Typer(
     name="hermes-skins",
@@ -274,10 +296,11 @@ def generate(
     template: str = typer.Argument(..., help="Template name (see 'hermes-skins templates')"),
     output: str = typer.Option(None, "--output", "-o", help="Output file path. If omitted, installs to ~/.hermes/skins/"),
     switch: bool = typer.Option(False, "--switch", help="Switch Hermes to this skin after generating"),
+    mode: Mode = typer.Option(Mode.dark, "--mode", "-m", help="Color mode: dark surfaces (default) or light surfaces (audit F2)."),
 ):
     """Generate a skin from a built-in template."""
     try:
-        skin = generate_from_template(template)
+        skin = generate_from_template(template, mode=mode.value)
     except ValueError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(1)
@@ -302,9 +325,10 @@ def random(
     seed: str = typer.Argument(None, help="Random seed (string or number). Same seed = same skin."),
     output: str = typer.Option(None, "--output", "-o", help="Output file path"),
     switch: bool = typer.Option(False, "--switch", help="Switch Hermes to this skin after generating"),
+    mode: Mode = typer.Option(Mode.dark, "--mode", "-m", help="Color mode: dark surfaces (default) or light surfaces."),
 ):
     """Generate a completely random skin."""
-    skin = generate_random(seed)
+    skin = generate_random(seed, mode=mode.value)
     if output:
         path = skin.dump(output)
     else:
@@ -314,14 +338,6 @@ def random(
     typer.echo(f"  Harmony: {skin.description}")
     if switch:
         _do_switch(skin.name)
-
-
-class Harmony(str, Enum):
-    complementary = "complementary"
-    analogous = "analogous"
-    triadic = "triadic"
-    monochrome = "monochrome"
-    split_comp = "split_comp"
 
 
 @app.command()
@@ -334,6 +350,7 @@ def custom(
     description: str = typer.Option("", "--description", "-d", help="Skin description"),
     output: str = typer.Option(None, "--output", "-o", help="Output file path"),
     switch: bool = typer.Option(False, "--switch", help="Switch Hermes to this skin after generating"),
+    mode: Mode = typer.Option(Mode.dark, "--mode", "-m", help="Color mode: dark surfaces (default) or light surfaces."),
 ):
     """Generate a custom skin from a base color and harmony."""
     color = color.strip()
@@ -348,6 +365,7 @@ def custom(
         agent_name=agent_name,
         prompt_symbol=prompt,
         description=description,
+        mode=mode.value,
     )
 
     # skin.name flows from user input; a traversal-ish name must never become
@@ -465,6 +483,378 @@ def export(
     skin.dump(out_path)
     typer.echo(f"✓ Exported '{skin.name}' → {out_path}")
 
+
+# ---------------------------------------------------------------------------
+# CRUD lifecycle (audit F7)
+# ---------------------------------------------------------------------------
+
+def _resolve_skin_path(name: str) -> Path | None:
+    """Find an installed skin file by lookup name (internal name or stem)."""
+    skins = installed_skins()
+    if name in skins:
+        return skins[name]
+    return None
+
+
+@app.command()
+def uninstall(
+    name: str = typer.Argument(..., help="Installed skin name to remove"),
+    force: bool = typer.Option(False, "--force", "-f", help="Remove even if it is the active skin"),
+):
+    """Remove an installed skin from ~/.hermes/skins/."""
+    path = _resolve_skin_path(name)
+    if path is None:
+        typer.echo(f"Skin '{name}' is not installed.", err=True)
+        typer.echo(f"Installed: {', '.join(sorted(installed_skins())) or '(none)'}", err=True)
+        raise typer.Exit(1)
+    active = active_skin_name()
+    if name == active and not force:
+        typer.echo(f"⚠ '{name}' is the ACTIVE skin. Use --force to remove it anyway.", err=True)
+        raise typer.Exit(1)
+    path.unlink()
+    typer.echo(f"✓ Uninstalled '{name}' ({path.name})")
+    if name == active:
+        typer.echo("  note: it was active — set a new skin with: hermes-skins switch <name>")
+
+
+@app.command()
+def rename(
+    old: str = typer.Argument(..., help="Installed skin name"),
+    new: str = typer.Argument(..., help="New name"),
+):
+    """Rename an installed skin: updates the file AND the internal name field.
+
+    Fixes the audit B9 dual-track (file stem vs internal name) for existing
+    installs: after rename, both agree.
+    """
+    path = _resolve_skin_path(old)
+    if path is None:
+        typer.echo(f"Skin '{old}' is not installed.", err=True)
+        raise typer.Exit(1)
+    safe_new = Path(new).name
+    if safe_new in ("", ".", ".."):
+        typer.echo(f"✗ Invalid new name: {new!r}", err=True)
+        raise typer.Exit(1)
+    if safe_new in installed_skins() and safe_new != old:
+        typer.echo(f"✗ A skin named '{safe_new}' already exists.", err=True)
+        raise typer.Exit(1)
+    try:
+        skin = Skin.load(path)
+    except Exception as e:
+        typer.echo(f"✗ Cannot load '{old}': {e}", err=True)
+        raise typer.Exit(1)
+    skin.name = safe_new
+    dst = hermes_skins_dir() / f"{safe_new}.yaml"
+    skin.dump(dst)
+    if dst.resolve() != path.resolve():
+        path.unlink(missing_ok=True)
+    typer.echo(f"✓ Renamed '{old}' → '{safe_new}'")
+    if active_skin_name() == old:
+        typer.echo(f"  note: '{old}' was the active skin — re-activate with: hermes-skins switch {safe_new}")
+
+
+@app.command()
+def clone(
+    name: str = typer.Argument(..., help="Installed skin or template name"),
+    new: str = typer.Argument(..., help="Name for the copy"),
+):
+    """Clone an installed skin or template under a new name."""
+    skins = installed_skins()
+    if name in skins:
+        skin = Skin.load(skins[name])
+    elif name in THEMES:
+        skin = generate_from_template(name)
+    else:
+        typer.echo(f"Skin '{name}' not found (installed or template).", err=True)
+        raise typer.Exit(1)
+    safe_new = Path(new).name
+    if safe_new in ("", ".", ".."):
+        typer.echo(f"✗ Invalid new name: {new!r}", err=True)
+        raise typer.Exit(1)
+    if safe_new in installed_skins():
+        typer.echo(f"✗ A skin named '{safe_new}' already exists.", err=True)
+        raise typer.Exit(1)
+    skin.name = safe_new
+    hermes_skins_dir().mkdir(parents=True, exist_ok=True)
+    dst = hermes_skins_dir() / f"{safe_new}.yaml"
+    skin.dump(dst)
+    typer.echo(f"✓ Cloned '{name}' → '{safe_new}' ({dst})")
+    typer.echo(f"  Activate: hermes-skins switch {safe_new}")
+
+
+# ---------------------------------------------------------------------------
+# Diff (audit F5)
+# ---------------------------------------------------------------------------
+
+@app.command()
+def diff(
+    a: str = typer.Argument(..., help="First skin (installed or template)"),
+    b: str = typer.Argument(..., help="Second skin (installed or template)"),
+    min_delta: float = typer.Option(
+        4.0, "--min-delta", "-t",
+        help="Highlight changed slots when any color channel shifts by this much (0-255).",
+    ),
+):
+    """Compare two skins: 29 color slots side by side + branding/spinner deltas."""
+    def _load(name: str) -> Skin:
+        skins = installed_skins()
+        if name in skins:
+            return Skin.load(skins[name])
+        if name in THEMES:
+            return generate_from_template(name)
+        typer.echo(f"Skin '{name}' not found.", err=True)
+        raise typer.Exit(1)
+
+    skin_a, skin_b = _load(a), _load(b)
+    ca, cb = skin_a.colors.to_dict(), skin_b.colors.to_dict()
+
+    def _channels(hx: str) -> tuple[int, int, int] | None:
+        if not isinstance(hx, str) or len(hx) < 7 or not hx.startswith("#"):
+            return None
+        try:
+            return int(hx[1:3], 16), int(hx[3:5], 16), int(hx[5:7], 16)
+        except ValueError:
+            return None
+
+    def _swatch(hx: str) -> str:
+        if not _color_enabled():
+            return "        "
+        rgb = _channels(hx)
+        if rgb is None:
+            return "????????"
+        return f"\033[48;2;{rgb[0]};{rgb[1]};{rgb[2]}m  \033[0m"
+
+    typer.echo(f"diff {a} → {b}:")
+    typer.echo(f"  {'slot':22s} {'A':10s} {'B':10s}  change")
+    changed = 0
+    for slot in ca:
+        va, vb = ca[slot], cb.get(slot, "?")
+        cha, chb = _channels(va), _channels(vb)
+        differs = va != vb
+        big = False
+        if cha and chb:
+            delta = max(abs(x - y) for x, y in zip(cha, chb))
+            big = delta >= min_delta
+        elif va != vb:
+            big = True
+        if differs:
+            changed += 1
+        if big:
+            mark = _fg_dim(" ●") if _color_enabled() else " *"
+            typer.echo(f"  {slot:22s} {_swatch(va)} {va:9s} {_swatch(vb)} {vb:9s}{mark}")
+        elif differs:
+            typer.echo(f"  {slot:22s} {_swatch(va)} {va:9s} {_swatch(vb)} {vb:9s}")
+    if changed == 0:
+        typer.echo("  (all 29 color slots identical)")
+    else:
+        typer.echo(f"  {changed}/29 slots differ; ● marks visually significant shifts (Δchannel ≥ {min_delta:g})")
+    # Branding / spinner summary
+    ba, bb = skin_a.branding, skin_b.branding
+    brand_diffs = [f"{f} ({getattr(ba, f)!r} → {getattr(bb, f)!r})"
+                   for f in ("agent_name", "prompt_symbol", "welcome", "goodbye", "response_label", "help_header")
+                   if getattr(ba, f) != getattr(bb, f)]
+    if brand_diffs:
+        typer.echo("  branding:")
+        for d in brand_diffs:
+            typer.echo(f"    · {d}")
+    if skin_a.spinner.waiting_faces != skin_b.spinner.waiting_faces:
+        typer.echo(f"  spinner faces: {skin_a.spinner.waiting_faces} → {skin_b.spinner.waiting_faces}")
+
+
+# ---------------------------------------------------------------------------
+# Remote install (audit F8)
+# ---------------------------------------------------------------------------
+
+def _fetch_url(url: str, timeout: float = 15.0) -> str:
+    """Fetch a skin YAML over http(s). urllib only — no new dependencies.
+
+    Gist URLs (gist.github.com/<user>/<id>) are auto-resolved to the raw URL.
+    """
+    # Gist convenience: resolve to raw
+    m = re.match(r"https://gist\.github\.com/([^/]+)/([0-9a-f]+)$", url.rstrip("/"))
+    if m:
+        url = f"https://gist.githubusercontent.com/{m.group(1)}/{m.group(2)}/raw"
+    if not re.match(r"^https?://", url):
+        raise ValueError(f"Only http(s) URLs are supported, got: {url!r}")
+    req = urllib.request.Request(url, headers={"User-Agent": "hermes-skins-engine"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310 (https-only enforced above)
+        data = resp.read(1024 * 1024)  # 1 MB cap — skins are small
+    return data.decode("utf-8", errors="replace")
+
+
+@app.command(name="install-url")
+def install_url(
+    url: str = typer.Argument(..., help="http(s) URL or gist.github.com link pointing to a skin YAML"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite an existing skin with the same name"),
+):
+    """Download, validate, and install a skin from a URL (audit F8)."""
+    typer.echo(f"Fetching {url} ...")
+    try:
+        text = _fetch_url(url)
+    except (urllib.error.URLError, ValueError, TimeoutError, OSError) as e:
+        typer.echo(f"✗ Download failed: {e}", err=True)
+        raise typer.Exit(1)
+    import tempfile
+    with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False, encoding="utf-8") as tf:
+        tf.write(text)
+        tmp = Path(tf.name)
+    try:
+        # Reuse the install command's validation and path handling
+        install(file=str(tmp))
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# Interactive picker (audit F3) — raw-mode TUI, zero dependencies
+# ---------------------------------------------------------------------------
+
+def _render_picker_screen(skins: dict[str, Path], themes: list[str], active: str | None,
+                          sel: int, entries: list[tuple[str, str, object]]) -> str:
+    """One frame of the picker: numbered list + preview of the selected entry."""
+    lines = ["", "  ┌─ hermes-skins picker ─────────────────────────────┐"]
+    for i, (kind, name, _src) in enumerate(entries):
+        cursor = "▸" if i == sel else " "
+        active_mark = " ← active" if (kind == "installed" and name == active) else ""
+        lines.append(f"  │ {cursor} {i + 1:2d}. [{kind:9s}] {name:16s}{active_mark}")
+    lines.append("  │")
+    lines.append("  │  ↑/↓ or j/k: move   Enter: switch+install   q: quit")
+    lines.append("  └───────────────────────────────────────────────────┘")
+    kind, name, src = entries[sel]
+    try:
+        skin = Skin.load(src) if kind == "installed" else generate_from_template(name)
+        lines.append("")
+        lines.append(strip_ansi(render_preview(skin)))
+    except Exception as e:
+        lines.append(f"  (preview failed: {e})")
+    return "\n".join(lines)
+
+
+def _read_key() -> str:
+    """Read one keypress in raw mode. Returns 'up'/'down'/'enter'/'quit'/other."""
+    import termios
+    import tty
+
+    fd = sys.stdin.fileno()
+    old = termios.tcgetattr(fd)
+    try:
+        tty.setraw(fd)
+        ch = sys.stdin.read(1)
+        if ch == "\x1b":
+            ch2 = sys.stdin.read(1)
+            if ch2 == "[":
+                ch3 = sys.stdin.read(1)
+                if ch3 == "A":
+                    return "up"
+                if ch3 == "B":
+                    return "down"
+            return "quit"
+        if ch in ("\r", "\n"):
+            return "enter"
+        if ch in ("q", "\x03"):  # q or Ctrl-C
+            return "quit"
+        if ch == "k":
+            return "up"
+        if ch == "j":
+            return "down"
+        return "other"
+    finally:
+        termios.tcsetattr(fd, termios.TCSADRAIN, old)
+
+
+@app.command()
+def picker():
+    """Interactively browse and preview skins with ↑/↓, Enter to switch (F3).
+
+    Pure-termios raw mode — no curses, no extra dependencies. Requires a TTY;
+    on non-Windows systems only.
+    """
+    if not sys.stdin.isatty() or sys.platform == "win32":
+        typer.echo("picker needs an interactive terminal (TTY). Use 'hermes-skins preview --all' instead.", err=True)
+        raise typer.Exit(1)
+
+    entries: list[tuple[str, str, object]] = []
+    for name, path in sorted(installed_skins().items()):
+        entries.append(("installed", name, path))
+    for tname in sorted(THEMES):
+        entries.append(("template", tname, tname))
+
+    active = active_skin_name()
+    sel = 0
+    # Start on the active skin if present
+    for i, (kind, name, _p) in enumerate(entries):
+        if kind == "installed" and name == active:
+            sel = i
+            break
+
+    import contextlib
+    import io
+
+    while True:
+        frame = _render_picker_screen(installed_skins(), sorted(THEMES), active, sel, entries)
+        # Clear screen + home cursor, then draw one frame
+        sys.stdout.write("\033[2J\033[H" + frame + "\n")
+        sys.stdout.flush()
+        key = _read_key()
+        if key == "up":
+            sel = (sel - 1) % len(entries)
+        elif key == "down":
+            sel = (sel + 1) % len(entries)
+        elif key == "enter":
+            kind, name, _src = entries[sel]
+            if kind == "template":
+                skin = generate_from_template(name)
+                hermes_skins_dir().mkdir(parents=True, exist_ok=True)
+                dst = hermes_skins_dir() / f"{skin.name}.yaml"
+                if not dst.exists():
+                    skin.dump(dst)
+                name = skin.name
+            _do_switch(name)
+            sys.stdout.write(f"\n  ✓ Switched to '{name}'. Opening Hermes with it next time.\n")
+            return
+        elif key == "quit":
+            sys.stdout.write("\n  (picker closed)\n")
+            return
+
+
+# ---------------------------------------------------------------------------
+# Watch (audit F4) — live preview while editing a skin YAML
+# ---------------------------------------------------------------------------
+
+@app.command()
+def watch(
+    file: str = typer.Argument(..., help="Path to a skin YAML file to watch"),
+    interval: float = typer.Option(0.5, "--interval", "-i", min=0.1, help="Poll interval in seconds"),
+):
+    """Live-preview a skin YAML as you edit it (mtime polling; F4)."""
+    p = Path(file).expanduser()
+    if not p.exists():
+        typer.echo(f"File not found: {p}", err=True)
+        raise typer.Exit(1)
+    last_mtime: float | None = None
+    last_render: str = ""
+    typer.echo(f"Watching {p} — edit the file and the preview refreshes. Ctrl-C to stop.")
+    try:
+        while True:
+            try:
+                mtime = p.stat().st_mtime
+            except FileNotFoundError:
+                sys.stdout.write("\033[2J\033[H(file deleted; waiting…)\n")
+                sys.stdout.flush()
+                time.sleep(interval)
+                continue
+            if mtime != last_mtime:
+                last_mtime = mtime
+                try:
+                    skin = Skin.load(p)
+                    last_render = render_preview(skin)
+                except Exception as e:
+                    last_render = f"(invalid YAML — showing last good preview when you fix it)\n✗ {e}"
+                sys.stdout.write("\033[2J\033[H" + last_render + "\n")
+                sys.stdout.flush()
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        typer.echo("\n(watch stopped)")
 
 @app.command()
 def version():

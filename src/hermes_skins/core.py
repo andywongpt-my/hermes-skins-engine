@@ -109,10 +109,27 @@ class Branding:
 # Main Skin dataclass
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Schema versioning (audit F12). Bump when the Skin schema gains/changes
+# fields in a way skins should be able to declare. Community skins written
+# for a NEWER engine carry a higher schema_version and validate() warns.
+# ---------------------------------------------------------------------------
+SCHEMA_VERSION = 1
+
+_KNOWN_TOP_KEYS = frozenset({
+    "name", "description", "schema_version", "author", "tags",
+    "colors", "spinner", "branding", "tool_prefix", "tool_emojis",
+    "banner_logo", "banner_hero",
+})
+
+
 @dataclass
 class Skin:
     name: str
     description: str = ""
+    schema_version: int = SCHEMA_VERSION
+    author: str = ""
+    tags: list[str] = field(default_factory=list)
     colors: Colors = field(default_factory=Colors)
     spinner: Spinner = field(default_factory=Spinner)
     branding: Branding = field(default_factory=Branding)
@@ -120,14 +137,22 @@ class Skin:
     tool_emojis: dict[str, str] = field(default_factory=dict)
     banner_logo: Optional[str] = None
     banner_hero: Optional[str] = None
+    # Unknown top-level keys from hand-edited / community YAML are preserved
+    # here so a load→dump round-trip never silently drops someone's metadata
+    # (audit F12). They are re-emitted after the known fields on dump.
+    extra: dict = field(default_factory=dict, repr=False, compare=False)
 
     # ----- I/O -----
 
     @classmethod
     def from_dict(cls, d: dict) -> "Skin":
+        extra = {k: v for k, v in d.items() if k not in _KNOWN_TOP_KEYS}
         return cls(
             name=d.get("name", "unnamed"),
             description=d.get("description", ""),
+            schema_version=d.get("schema_version", SCHEMA_VERSION),
+            author=d.get("author", ""),
+            tags=list(d.get("tags", [])) if isinstance(d.get("tags", []), list) else [],
             colors=Colors.from_dict(d.get("colors", {})),
             spinner=Spinner.from_dict(d.get("spinner", {})),
             branding=Branding.from_dict(d.get("branding", {})),
@@ -135,22 +160,31 @@ class Skin:
             tool_emojis=d.get("tool_emojis", {}),
             banner_logo=d.get("banner_logo"),
             banner_hero=d.get("banner_hero"),
+            extra=extra,
         )
 
     def to_dict(self) -> dict:
         d: dict = {
             "name": self.name,
             "description": self.description,
-            "colors": self.colors.to_dict(),
-            "spinner": self.spinner.to_dict(),
-            "branding": self.branding.to_dict(),
-            "tool_prefix": self.tool_prefix,
-            "tool_emojis": dict(self.tool_emojis),
+            "schema_version": self.schema_version,
         }
+        if self.author:
+            d["author"] = self.author
+        if self.tags:
+            d["tags"] = list(self.tags)
+        d["colors"] = self.colors.to_dict()
+        d["spinner"] = self.spinner.to_dict()
+        d["branding"] = self.branding.to_dict()
+        d["tool_prefix"] = self.tool_prefix
+        d["tool_emojis"] = dict(self.tool_emojis)
         if self.banner_logo:
             d["banner_logo"] = self.banner_logo
         if self.banner_hero:
             d["banner_hero"] = self.banner_hero
+        # Unknown keys ride along at the end; known fields always win.
+        for k, v in self.extra.items():
+            d.setdefault(k, v)
         return d
 
     @classmethod
@@ -178,6 +212,14 @@ class Skin:
         warnings: list[str] = []
         if not self.name:
             warnings.append("name is empty")
+        # Schema versioning (F12): skins written for a NEWER engine may use
+        # features we don't know; flag it so upgrades aren't silent.
+        if not isinstance(self.schema_version, int) or self.schema_version < 1:
+            warnings.append(f"schema_version = {self.schema_version!r} is not a positive integer")
+        elif self.schema_version > SCHEMA_VERSION:
+            warnings.append(
+                f"schema_version {self.schema_version} is newer than engine's {SCHEMA_VERSION} — some fields may be ignored"
+            )
         # Strict hex: '#' + 6 hex digits, optional 2-digit alpha. Catches
         # "#ZZZZZZ" (wrong chars) that a length-only check would pass.
         hex_re = re.compile(r"^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$")

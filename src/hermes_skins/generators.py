@@ -109,7 +109,7 @@ def ensure_contrast(fg_hex: str, bg_hex: str, min_ratio: float = 4.5) -> str:
 # Palette Engine — generates a full 15-color palette from a seed color
 # ---------------------------------------------------------------------------
 
-def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
+def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = "dark") -> Colors:
     """
     Generate a complete 29-color palette from a single base color.
 
@@ -119,7 +119,15 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
       - triadic:        base + 120° + 240°
       - monochrome:     base hue, varying lightness
       - split_comp:     base + (opposite ± 30°)
+
+    Modes (audit F2):
+      - dark:  dark surfaces, light text (default; classic terminal)
+      - light: light surfaces (bg L 0.92-0.97), dark text (L 0.10-0.22) —
+        inverted derivation for light-terminal environments.
     """
+    if mode not in ("dark", "light"):
+        raise ValueError(f"Invalid mode {mode!r}: expected 'dark' or 'light'")
+
     h, s, l = hex_to_hsl(base_hex)
 
     # Derive accent color from harmony
@@ -139,48 +147,135 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
     elif harmony == "split_comp":
         accent_h = (h + 150) % 360
         accent_s, accent_l = s, l
+    # Extended harmonies (audit F11): three more hues on the wheel are
+    # exported as secondary_colors so callers can theme extra UI slots.
+    elif harmony == "tetradic":
+        accent_h = (h + 90) % 360
+        accent_s, accent_l = s, l
+    elif harmony == "square":
+        accent_h = (h + 90) % 360
+        accent_s, accent_l = s, l
+    elif harmony == "pastel":
+        # Same hue, lifted lightness + softened saturation
+        accent_h = h
+        accent_s = s * 0.45
+        accent_l = min(0.85, max(l, 0.70))
+    elif harmony == "neon":
+        # Same hue, full saturation, bright lightness
+        accent_h = h
+        accent_s = 1.0
+        accent_l = 0.60
     else:
         accent_h, accent_s, accent_l = h, s, l
 
     accent = hsl_to_hex(accent_h, accent_s, accent_l)
+
+    # Secondary hues for extended harmonies (F11): distributed to
+    # ui_label / session_label / selection_bg downstream via generate_skin.
+    # For the classic five harmonies these fall back to derived shades.
+    if harmony == "tetradic":
+        second_h, third_h = (h + 180) % 360, (h + 270) % 360
+        second_s_l, third_s_l = (s, l), (s, l)
+    elif harmony == "square":
+        second_h, third_h = (h + 180) % 360, (h + 270) % 360
+        second_s_l, third_s_l = (s, l), (s, l)
+    elif harmony == "pastel":
+        second_h, third_h = (h + 30) % 360, (h - 30) % 360
+        second_s_l, third_s_l = (s * 0.45, min(0.85, max(l, 0.70))), (s * 0.45, min(0.85, max(l, 0.70)))
+    elif harmony == "neon":
+        second_h, third_h = (h + 120) % 360, (h + 240) % 360
+        second_s_l, third_s_l = (1.0, 0.60), (1.0, 0.60)
+    else:
+        second_h, third_h = (h + 30) % 360, (h - 30) % 360
+        second_s_l, third_s_l = (s * 0.8, l), (s * 0.8, l)
+    secondary = hsl_to_hex(second_h, *second_s_l)
+    tertiary = hsl_to_hex(third_h, *third_s_l)
     dark = hsl_to_hex(h, s, max(0.05, l - 0.35))
     dim = hsl_to_hex(h, s * 0.6, max(0.15, l - 0.20))
     bright = hsl_to_hex(h, s, min(0.85, l + 0.25))
     text = hsl_to_hex(h, s * 0.15, 0.90)
 
-    # Status bar — dark base surface with accent highlights
-    status_bg = hsl_to_hex(h, s * 0.3, max(0.08, l - 0.30))
+    if mode == "light":
+        # Inverted derivation: near-white tinted surfaces, dark text.
+        # Accent keeps its hue but darkens so it reads on a light surface.
+        surface_l_low, surface_l_high = 0.92, 0.97
+        text_l_low, text_l_high = 0.10, 0.22
 
-    # Semantic colors — kept readable regardless of palette. Each is clamped
-    # against the status-bar background so green/red/orange never melt into a
-    # dark surface (audit 0.2.0: fixed #CC0000 measured 1.3-3.1:1 on dark bgs).
-    ok = ensure_contrast("#00AA00", status_bg, 4.5)
-    error = ensure_contrast("#CC0000", status_bg, 4.5)
-    warn = ensure_contrast("#DDAA00", status_bg, 4.5)
-    # Semantic "bad" color — must stay a warning hue regardless of theme base.
-    # Deriving it from the base hue made green/blue themes render "bad" as
-    # green/cyan (see audit B5).
-    bad = ensure_contrast("#FF8C00", status_bg, 4.5)
+        accent = ensure_contrast(
+            hsl_to_hex(accent_h, min(1.0, accent_s * 1.1), min(0.45, accent_l)),
+            hsl_to_hex(h, s * 0.25, 0.95),  # approximate surface for clamping
+            4.5,
+        )
+        dark = hsl_to_hex(h, s * 0.8, text_l_low)          # darkest ink — borders
+        dim = hsl_to_hex(h, s * 0.3, 0.35)                 # muted ink
+        bright = hsl_to_hex(h, s * 0.9, 0.55)              # mid-tone highlight
+        text = hsl_to_hex(h, s * 0.1, text_l_high)         # body text ink
 
-    # Derived text/strong/dim are clamped to legibility against status_bg
-    # (light bases previously produced ~1:1 pairs).
-    status_text = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.70), status_bg, 4.5)
-    status_strong = ensure_contrast(bright, status_bg, 4.5)
-    status_dim = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.45), status_bg, 3.0)
-    status_good = ok
-    status_warn = warn
-    status_bad = bad
-    status_critical = error
+        # Status bar — light tinted surface with dark ink
+        status_bg = hsl_to_hex(h, s * 0.25, surface_l_low)
 
-    # Voice status — same dark surface
-    voice_bg = status_bg
+        # Semantic colors — clamped against the light surface (darker side)
+        ok = ensure_contrast("#008000", status_bg, 4.5)
+        error = ensure_contrast("#B00000", status_bg, 4.5)
+        warn = ensure_contrast("#8A6D00", status_bg, 4.5)
+        bad = ensure_contrast("#B35F00", status_bg, 4.5)
 
-    # TUI selection / completion menu
-    sel_bg = hsl_to_hex(h, s * 0.4, max(0.12, l - 0.25))
-    comp_bg = status_bg
-    comp_current = hsl_to_hex(h, s * 0.5, max(0.18, l - 0.18))
-    comp_meta = status_bg
-    comp_meta_current = comp_current
+        status_text = ensure_contrast(hsl_to_hex(h, s * 0.2, text_l_high), status_bg, 4.5)
+        status_strong = ensure_contrast(dark, status_bg, 4.5)
+        status_dim = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.45), status_bg, 3.0)
+        status_good = ok
+        status_warn = warn
+        status_bad = bad
+        status_critical = error
+
+        voice_bg = status_bg
+
+        sel_bg = hsl_to_hex(h, s * 0.3, surface_l_low)
+        comp_bg = status_bg
+        comp_current = hsl_to_hex(h, s * 0.35, 0.88)
+        comp_meta = status_bg
+        comp_meta_current = comp_current
+    else:
+        # Status bar — dark base surface with accent highlights
+        status_bg = hsl_to_hex(h, s * 0.3, max(0.08, l - 0.30))
+
+        # Semantic colors — kept readable regardless of palette. Each is clamped
+        # against the status-bar background so green/red/orange never melt into a
+        # dark surface (audit 0.2.0: fixed #CC0000 measured 1.3-3.1:1 on dark bgs).
+        ok = ensure_contrast("#00AA00", status_bg, 4.5)
+        error = ensure_contrast("#CC0000", status_bg, 4.5)
+        warn = ensure_contrast("#DDAA00", status_bg, 4.5)
+        # Semantic "bad" color — must stay a warning hue regardless of theme base.
+        # Deriving it from the base hue made green/blue themes render "bad" as
+        # green/cyan (see audit B5).
+        bad = ensure_contrast("#FF8C00", status_bg, 4.5)
+
+        # Derived text/strong/dim are clamped to legibility against status_bg
+        # (light bases previously produced ~1:1 pairs).
+        status_text = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.70), status_bg, 4.5)
+        status_strong = ensure_contrast(bright, status_bg, 4.5)
+        status_dim = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.45), status_bg, 3.0)
+        status_good = ok
+        status_warn = warn
+        status_bad = bad
+        status_critical = error
+
+        # Voice status — same dark surface
+        voice_bg = status_bg
+
+        # TUI selection / completion menu
+        sel_bg = hsl_to_hex(h, s * 0.4, max(0.12, l - 0.25))
+        comp_bg = status_bg
+        comp_current = hsl_to_hex(h, s * 0.5, max(0.18, l - 0.18))
+        comp_meta = status_bg
+        comp_meta_current = comp_current
+
+    # F11: extended harmonies route their extra hues into label/selection
+    # slots; the classic five keep their original derived shades so existing
+    # template outputs (all classic) stay byte-identical.
+    _extended = harmony in ("tetradic", "square", "pastel", "neon")
+    label_hue = secondary if _extended else accent
+    session_hue = tertiary if _extended else bright
 
     return Colors(
         banner_border=dark,
@@ -189,14 +284,14 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
         banner_dim=dim,
         banner_text=text,
         ui_accent=accent,
-        ui_label=adjust_lightness(accent, -0.10),
+        ui_label=adjust_lightness(label_hue, -0.10),
         ui_ok=ok,
         ui_error=error,
         ui_warn=warn,
         prompt=text,
         input_rule=dark,
         response_border=accent,
-        session_label=bright,
+        session_label=session_hue,
         session_border=dark,
         # Status bar
         status_bar_bg=status_bg,
@@ -221,6 +316,56 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
 # ---------------------------------------------------------------------------
 # Theme Templates — named archetypes with personality
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Banner art palette sync (audit F9)
+# ---------------------------------------------------------------------------
+
+def _hex_lightness(hex_color: str) -> float:
+    """Lightness (0-1) of a #RRGGBB color — used to rank banner art colors."""
+    try:
+        _, _, l = hex_to_hsl(hex_color)
+        return l
+    except ValueError:
+        return -1.0  # malformed colors sort first and are left untouched
+
+
+def sync_banner_art(art: str, colors) -> str:
+    """Re-color a banner art string to match the generated palette (F9).
+
+    Template banner art carries hand-picked hexes that drift from the generated
+    palette over time. Each DISTINCT hex in the art is ranked by lightness and
+    re-mapped onto palette roles: darkest -> banner_border, lightest ->
+    banner_text, the middle(s) -> banner_accent (hue-preserved from the base).
+    Rich tag structure ([bold #HEX]…[/] / [#HEX]…[/]) is preserved exactly.
+    """
+    if not art or "[" not in art:
+        return art
+    used = []
+    seen = set()
+    for m in re.finditer(r"\[(bold\s+)?(#[0-9a-fA-F]{6})\]", art):
+        hx = m.group(2)
+        if hx not in seen:
+            seen.add(hx)
+            used.append(hx)
+    if not used:
+        return art
+    ranked = sorted(used, key=_hex_lightness)
+    if len(ranked) == 1:
+        mapping = {ranked[0]: colors.banner_accent}
+    else:
+        mapping = {ranked[0]: colors.banner_border}
+        for hx in ranked[1:-1]:
+            mapping[hx] = colors.banner_accent
+        mapping[ranked[-1]] = colors.banner_text
+
+    def _sub(m: re.Match) -> str:
+        bold, hx = m.group(1), m.group(2)
+        new = mapping.get(hx, hx)
+        return f"[{bold.strip() + ' ' if bold else ''}{new}]"
+
+    return re.sub(r"\[(bold\s+)?(#[0-9a-fA-F]{6})\]", _sub, art)
+
 
 THEMES: dict[str, dict] = {
     "asuka": {
@@ -674,13 +819,13 @@ DEFAULT_TOOL_EMOJIS = {
 }
 
 
-def generate_from_template(template_name: str) -> Skin:
+def generate_from_template(template_name: str, mode: str = "dark") -> Skin:
     """Generate a Skin from a named theme template."""
     if template_name not in THEMES:
         raise ValueError(f"Unknown template: {template_name!r}. Available: {list(THEMES.keys())}")
 
     t = THEMES[template_name]
-    colors = generate_palette(t["base_color"], t.get("harmony", "complementary"))
+    colors = generate_palette(t["base_color"], t.get("harmony", "complementary"), mode=mode)
     spinner = Spinner(
         waiting_faces=t.get("waiting_faces", ["(·)", "(◦)"]),
         thinking_faces=t.get("thinking_faces", t.get("waiting_faces", ["(·)", "(◦)"])),
@@ -696,6 +841,17 @@ def generate_from_template(template_name: str) -> Skin:
         help_header=t.get("help_header", "Available Commands"),
     )
 
+    # F9: banner art follows the generated palette (each distinct hex ranked
+    # by lightness -> border/accent/text roles). Only applies to template
+    # generation; skins dumped to YAML keep the synced concrete hexes, so
+    # loading them back is a no-op.
+    banner_logo = t.get("banner_logo")
+    banner_hero = t.get("banner_hero")
+    if banner_logo:
+        banner_logo = sync_banner_art(banner_logo, colors)
+    if banner_hero:
+        banner_hero = sync_banner_art(banner_hero, colors)
+
     return Skin(
         name=template_name,
         description=t.get("description", ""),
@@ -704,8 +860,8 @@ def generate_from_template(template_name: str) -> Skin:
         branding=branding,
         tool_prefix=t.get("tool_prefix", "┊"),
         tool_emojis=t.get("tool_emojis", dict(DEFAULT_TOOL_EMOJIS)),
-        banner_logo=t.get("banner_logo"),
-        banner_hero=t.get("banner_hero"),
+        banner_logo=banner_logo,
+        banner_hero=banner_hero,
     )
 
 
@@ -745,11 +901,12 @@ RANDOM_PROMPT_SYMBOLS = ["▸ ❯ ", "◆ ❯ ", "▲ ❯ ", "✦ ❯ ", "► �
 RANDOM_TOOL_PREFIXES = ["┊", "┃", "│", "║", "╟", "╠", "╳", "┆"]
 
 
-def generate_random(seed: Optional[str | int] = None) -> Skin:
+def generate_random(seed: Optional[str | int] = None, mode: str = "dark") -> Skin:
     """
     Generate a completely random skin.
 
     If seed is provided, generation is deterministic (same seed → same skin).
+    mode: "dark" (default) or "light" — see generate_palette (audit F2).
     """
     if seed is not None:
         if isinstance(seed, str):
@@ -767,7 +924,7 @@ def generate_random(seed: Optional[str | int] = None) -> Skin:
     base_hex = hsl_to_hex(hue, sat, light)
 
     harmony = rng.choice(RANDOM_HARMONIES)
-    colors = generate_palette(base_hex, harmony)
+    colors = generate_palette(base_hex, harmony, mode=mode)
 
     name = rng.choice(RANDOM_PALETTE_NAMES).replace(" ", "-").lower()
     faces = rng.choice(RANDOM_FACES)
@@ -793,14 +950,27 @@ def generate_random(seed: Optional[str | int] = None) -> Skin:
         help_header=f"{faces[0]} Available Commands",
     )
 
+    # Dynamic tool emoji (audit F15): instead of handing every random skin the
+    # same DEFAULT_TOOL_EMOJIS table, derive icons from the chosen spinner
+    # faces so each skin's tool row feels coherent with its own identity.
+    glyphs = [f.strip("()") for f in faces] or ["▸"]
+    reserved = {"?", "↻", "⚙", "☐", "⚗"}  # semantic icons kept stable
+    tool_emojis: dict[str, str] = {}
+    for i, tool in enumerate(DEFAULT_TOOL_EMOJIS):
+        if DEFAULT_TOOL_EMOJIS[tool] in reserved:
+            tool_emojis[tool] = DEFAULT_TOOL_EMOJIS[tool]
+        else:
+            tool_emojis[tool] = glyphs[(i * 3 + 1) % len(glyphs)]
+
+    mode_suffix = "" if mode == "dark" else "-light"
     return Skin(
-        name=f"random-{name}",
-        description=f"Randomly generated skin — {harmony} harmony, base {base_hex}",
+        name=f"random-{name}{mode_suffix}",
+        description=f"Randomly generated skin — {harmony} harmony, base {base_hex}, {mode} mode",
         colors=colors,
         spinner=spinner,
         branding=branding,
         tool_prefix=prefix,
-        tool_emojis=dict(DEFAULT_TOOL_EMOJIS),
+        tool_emojis=tool_emojis,
     )
 
 
@@ -811,9 +981,10 @@ def generate_custom(
     agent_name: Optional[str] = None,
     prompt_symbol: Optional[str] = None,
     description: str = "",
+    mode: str = "dark",
 ) -> Skin:
     """Generate a skin from a custom base color and harmony."""
-    colors = generate_palette(base_color, harmony)
+    colors = generate_palette(base_color, harmony, mode=mode)
 
     return Skin(
         name=name,
