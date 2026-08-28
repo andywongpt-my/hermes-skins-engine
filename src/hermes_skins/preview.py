@@ -5,18 +5,77 @@ without starting a full Hermes session.
 
 from __future__ import annotations
 
+import re
+import shutil
+
 from .core import Skin
 
 # ANSI 24-bit truecolor helpers
+
+def _rgb(hex_color: str) -> tuple[int, int, int] | None:
+    """Parse #RRGGBB to an (r, g, b) tuple. Returns None on malformed input
+    (including non-string values from hand-edited YAML) so a broken installed
+    skin previews with validation warnings instead of crashing (audit B2)."""
+    if not isinstance(hex_color, str):
+        return None
+    h = hex_color.strip().lstrip("#")
+    if len(h) < 6:
+        return None
+    try:
+        return int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    except ValueError:
+        return None
+
+
 def _fg(hex_color: str, text: str) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    rgb = _rgb(hex_color)
+    if rgb is None:
+        return text
+    r, g, b = rgb
     return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
 
+
 def _bold_fg(hex_color: str, text: str) -> str:
-    h = hex_color.lstrip("#")
-    r, g, b = int(h[0:2], 16), int(h[2:4], 16), int(h[4:6], 16)
+    rgb = _rgb(hex_color)
+    if rgb is None:
+        return text
+    r, g, b = rgb
     return f"\033[1;38;2;{r};{g};{b}m{text}\033[0m"
+
+
+# Rich markup → ANSI (audit B7). Template banner art uses Rich-style tags
+# like "[bold #C98293]...[/]" / "[#E8C9D1]...[/]" which the ANSI renderer
+# used to print as raw text. Convert the two tag forms we actually emit.
+_RICH_TAG = re.compile(r"\[(bold\s+)?(#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?)\](.*?)\[/\]", re.DOTALL)
+
+
+def convert_rich_markup(text: str) -> str:
+    """Convert `[bold #HEX]...[/]` and `[#HEX]...[/]` to ANSI truecolor."""
+
+    def _sub(m: re.Match) -> str:
+        bold, color, _, body = m.group(1), m.group(2), m.group(3), m.group(4)
+        return _bold_fg(color, body) if bold else _fg(color, body)
+
+    return _RICH_TAG.sub(_sub, text)
+
+
+def _wrap_tool_row(items: list[str], width: int = 80) -> list[str]:
+    """Wrap tool icon entries so narrow terminals don't overflow (audit B12)."""
+    try:
+        width = max(40, shutil.get_terminal_size((width, 24)).columns - 4)
+    except Exception:
+        pass
+    lines: list[str] = []
+    current = ""
+    for item in items:
+        if current and len(current) + 2 + len(item) > width:
+            lines.append(current)
+            current = item
+        else:
+            current = f"{current}  {item}" if current else item
+    if current:
+        lines.append(current)
+    return lines
 
 
 def render_preview(skin: Skin) -> str:
@@ -59,22 +118,23 @@ def render_preview(skin: Skin) -> str:
     lines.append(f"  {_fg(c.banner_dim, 'help:       ')}{_fg(c.banner_text, skin.branding.help_header)}")
     lines.append("")
 
-    # Tool emojis
+    # Tool emojis — wrapped to terminal width
     lines.append(_fg(c.ui_label, "  Tool Icons:"))
-    tools_row = "  ".join(f"{emoji} {name}" for name, emoji in skin.tool_emojis.items())
-    lines.append(f"  {_fg(c.banner_text, tools_row)}")
+    tools = [f"{emoji} {name}" for name, emoji in skin.tool_emojis.items()]
+    for row in _wrap_tool_row(tools):
+        lines.append(f"  {_fg(c.banner_text, row)}")
     lines.append("")
 
-    # Banner art (if present)
+    # Banner art (if present) — Rich markup converted to ANSI
     if skin.banner_logo:
         lines.append(_fg(c.banner_border, "  " + "─" * 50))
         lines.append(_fg(c.ui_label, "  Banner Logo:"))
-        lines.append(skin.banner_logo.rstrip("\n"))
+        lines.append(convert_rich_markup(skin.banner_logo.rstrip("\n")))
         lines.append("")
 
     if skin.banner_hero:
         lines.append(_fg(c.ui_label, "  Banner Hero:"))
-        lines.append(skin.banner_hero.rstrip("\n"))
+        lines.append(convert_rich_markup(skin.banner_hero.rstrip("\n")))
         lines.append("")
 
     lines.append(_fg(c.banner_border, "  " + "─" * 50))

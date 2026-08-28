@@ -6,12 +6,12 @@ Independent skin engine and generator for [Hermes Agent](https://github.com/Nous
 
 ## Features
 
-- 🎨 **Color-theory palette engine** — generate 29-color palettes from a single base color using HSL harmony (complementary, analogous, triadic, monochrome, split-complementary)
+- 🎨 **Color-theory palette engine** — generate 29-color palettes from a single base color using HSL harmony (complementary, analogous, triadic, monochrome, split-complementary), with strict hex validation
 - 🎭 **8 built-in Evangelion theme templates** — Asuka, Rei, Shinji, Misato, Kaworu, NERV, Berserk, SEELE
 - 🎲 **Random skin generator** — deterministic with seed support, or fully random
-- 🖥️ **Terminal preview** — see colors, spinners, branding, and banner art before installing
+- 🖥️ **Terminal preview** — colors, spinners, branding, tool icons, and Rich-rendered banner art; `preview` with no argument shows the active skin, `--all` dumps every template
 - 📦 **CLI tool** — list, preview, generate, install, switch, export skins
-- ✅ **Schema validation** — catches invalid hex colors, missing spinner frames, etc.
+- ✅ **Schema validation** — catches invalid hex colors (`#ZZZZZZ`, malformed alpha), missing spinner frames; `install` validates before copying
 
 ## Install
 
