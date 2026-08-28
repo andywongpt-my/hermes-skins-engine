@@ -60,7 +60,7 @@ def test_generate_to_output_file(runner, tmp_path):
     result = runner.invoke(app, ["generate", "asuka", "-o", str(out)])
     assert result.exit_code == 0
     assert out.exists()
-    data = yaml.safe_load(out.read_text())
+    data = yaml.safe_load(out.read_text(encoding="utf-8"))
     assert data["name"] == "asuka"
     assert len(data["colors"]) == 29
 
@@ -75,7 +75,7 @@ def test_random_seed_deterministic_files(runner, tmp_path):
     o1, o2 = tmp_path / "r1.yaml", tmp_path / "r2.yaml"
     runner.invoke(app, ["random", "seed-x", "-o", str(o1)])
     runner.invoke(app, ["random", "seed-x", "-o", str(o2)])
-    assert o1.read_text() == o2.read_text()
+    assert o1.read_text(encoding="utf-8") == o2.read_text(encoding="utf-8")
 
 
 def test_custom_writes_valid_skin(runner, tmp_path):
@@ -85,7 +85,7 @@ def test_custom_writes_valid_skin(runner, tmp_path):
     assert result.exit_code == 0
     assert "triadic" in result.output  # enum repr must not leak (AGY finding)
     assert "Harmony.complementary" not in result.output
-    data = yaml.safe_load(out.read_text())
+    data = yaml.safe_load(out.read_text(encoding="utf-8"))
     assert data["name"] == "mycustom"
 
 
@@ -300,7 +300,7 @@ def test_export_installed_skin(runner, isolated_home, tmp_path):
     result = runner.invoke(app, ["export", "nerv", "-o", str(out)])
     assert result.exit_code == 0
     assert out.exists()
-    assert yaml.safe_load(out.read_text())["name"] == "nerv"
+    assert yaml.safe_load(out.read_text(encoding="utf-8"))["name"] == "nerv"
 
 
 def test_export_unknown_fails(runner, isolated_home):
