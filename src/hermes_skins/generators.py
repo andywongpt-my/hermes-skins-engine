@@ -148,13 +148,20 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
     bright = hsl_to_hex(h, s, min(0.85, l + 0.25))
     text = hsl_to_hex(h, s * 0.15, 0.90)
 
-    # Semantic colors — keep readable regardless of palette
-    ok = "#00AA00"
-    error = "#CC0000"
-    warn = "#DDAA00"
-
     # Status bar — dark base surface with accent highlights
     status_bg = hsl_to_hex(h, s * 0.3, max(0.08, l - 0.30))
+
+    # Semantic colors — kept readable regardless of palette. Each is clamped
+    # against the status-bar background so green/red/orange never melt into a
+    # dark surface (audit 0.2.0: fixed #CC0000 measured 1.3-3.1:1 on dark bgs).
+    ok = ensure_contrast("#00AA00", status_bg, 4.5)
+    error = ensure_contrast("#CC0000", status_bg, 4.5)
+    warn = ensure_contrast("#DDAA00", status_bg, 4.5)
+    # Semantic "bad" color — must stay a warning hue regardless of theme base.
+    # Deriving it from the base hue made green/blue themes render "bad" as
+    # green/cyan (see audit B5).
+    bad = ensure_contrast("#FF8C00", status_bg, 4.5)
+
     # Derived text/strong/dim are clamped to legibility against status_bg
     # (light bases previously produced ~1:1 pairs).
     status_text = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.70), status_bg, 4.5)
@@ -162,10 +169,7 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
     status_dim = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.45), status_bg, 3.0)
     status_good = ok
     status_warn = warn
-    # Semantic "bad" color — must stay a warning hue regardless of theme base.
-    # Deriving it from the base hue made green/blue themes render "bad" as
-    # green/cyan (see audit B5).
-    status_bad = "#FF8C00"
+    status_bad = bad
     status_critical = error
 
     # Voice status — same dark surface

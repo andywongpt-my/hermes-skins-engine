@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "hermes-skins"
-version = "0.1.1"
+version = "0.2.0"
 description = "Independent skin engine and generator for Hermes Agent CLI — own schema, color-theory generators, random skin creation."
 readme = "README.md"
 license = "MIT"
@@ -31,6 +31,13 @@ hermes-skins = "hermes_skins.cli:app"
 
 [project.urls]
 Homepage = "https://github.com/andywongpt-my/hermes-skins-engine"
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_skins"]

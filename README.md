@@ -4,14 +4,18 @@ Independent skin engine and generator for [Hermes Agent](https://github.com/Nous
 
 ![Hermes Skins Preview](assets/hermes-skins-preview.png)
 
+[![CI](https://github.com/andywongpt-my/hermes-skins-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/andywongpt-my/hermes-skins-engine/actions/workflows/ci.yml)
+
 ## Features
 
 - 🎨 **Color-theory palette engine** — generate 29-color palettes from a single base color using HSL harmony (complementary, analogous, triadic, monochrome, split-complementary), with strict hex validation
 - 🎭 **8 built-in Evangelion theme templates** — Asuka, Rei, Shinji, Misato, Kaworu, NERV, Berserk, SEELE
 - 🎲 **Random skin generator** — deterministic with seed support, or fully random
-- 🖥️ **Terminal preview** — colors, spinners, branding, tool icons, and Rich-rendered banner art; `preview` with no argument shows the active skin, `--all` dumps every template
-- 📦 **CLI tool** — list, preview, generate, install, switch, export skins
+- 🖥️ **Terminal preview** — colors, spinners, branding, tool icons, and Rich-rendered banner art; `preview` with no argument shows the active skin, `--all` dumps every template; honors `NO_COLOR`
+- 📦 **CLI tool** — list (marks the active skin), preview, generate, validate, install, switch, export skins
 - ✅ **Schema validation** — catches invalid hex colors (`#ZZZZZZ`, malformed alpha), missing spinner frames; `install` validates before copying
+- 🧪 **WCAG 2.1 contrast engine** — derived status-bar and semantic colors are clamped to ≥4.5:1 (dim ≥3.0:1); `hermes-skins validate` re-checks any skin file or your whole installed set
+- 🧬 **150-test pytest suite + GitHub Actions CI** across Linux/macOS/Windows, Python 3.10–3.13
 
 ## Install
 
@@ -44,8 +48,12 @@ hermes-skins random "nerv-hq-2026"
 # Custom skin from a base color
 hermes-skins custom my-theme --color "#FF6D00" --harmony triadic --switch
 
-# List installed skins
+# List installed skins (← active marks the skin from ~/.hermes/config.yaml)
 hermes-skins list
+
+# Validate one file or everything installed (schema + WCAG contrast)
+hermes-skins validate ./my-theme.yaml
+hermes-skins validate
 
 # Export a skin to a file
 hermes-skins export asuka -o ./my-asuka.yaml
@@ -85,7 +93,7 @@ base_color (#CC0033) + harmony=complementary
   → dim (saturation × 0.6, lightness - 0.20)
   → bright (lightness + 0.25)
   → text (desaturated, high lightness)
-  → semantic: ok=#00AA00, error=#CC0000, warn=#DDAA00
+  → semantic: ok/error/warn/bad clamped to ≥4.5:1 on the status-bar bg
   → status_bar (8 slots), voice_status, selection, completion_menu (4 slots)
 ```
 

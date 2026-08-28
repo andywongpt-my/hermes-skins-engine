@@ -5,12 +5,31 @@ without starting a full Hermes session.
 
 from __future__ import annotations
 
+import os
 import re
 import shutil
 
 from .core import Skin
 
 # ANSI 24-bit truecolor helpers
+
+# NO_COLOR support (https://no-color.org): when the NO_COLOR env var is set
+# (to any value, per the spec), the preview renders as plain text. CLICOLOR=0
+# disables color too; CLICOLOR_FORCE=1 always wins over NO_COLOR.
+_ANSI_RE = re.compile(r"\033\[[0-9;]*m")
+
+
+def _color_enabled() -> bool:
+    if os.environ.get("CLICOLOR_FORCE", "") not in ("", "0"):
+        return True
+    if "NO_COLOR" in os.environ and os.environ["NO_COLOR"] != "":
+        return False
+    return os.environ.get("CLICOLOR", "1") != "0"
+
+
+def strip_ansi(text: str) -> str:
+    return _ANSI_RE.sub("", text)
+
 
 def _rgb(hex_color: str) -> tuple[int, int, int] | None:
     """Parse #RRGGBB to an (r, g, b) tuple. Returns None on malformed input
@@ -81,6 +100,11 @@ def _wrap_tool_row(items: list[str], width: int = 80) -> list[str]:
 def render_preview(skin: Skin) -> str:
     """Return a terminal-rendered preview string for a skin."""
     c = skin.colors
+    color_on = _color_enabled()
+
+    def out(s: str) -> str:
+        return s if color_on else strip_ansi(s)
+
     lines: list[str] = []
 
     # Banner title
@@ -149,4 +173,4 @@ def render_preview(skin: Skin) -> str:
         lines.append(_fg(c.ui_ok, "  ✓ Skin valid — no warnings"))
 
     lines.append("")
-    return "\n".join(lines)
+    return out("\n".join(lines))

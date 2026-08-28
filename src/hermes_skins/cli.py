@@ -33,7 +33,7 @@ from .generators import (
     list_templates,
     THEMES,
 )
-from .preview import render_preview
+from .preview import render_preview, _color_enabled, strip_ansi
 
 app = typer.Typer(
     name="hermes-skins",
@@ -103,6 +103,7 @@ def list():
         typer.echo("No skins installed in ~/.hermes/skins/")
         typer.echo("Use 'hermes-skins generate' or 'hermes-skins install' to add one.")
         return
+    active = active_skin_name()
     typer.echo(f"Installed skins ({len(skins)}):")
     for name, path in sorted(skins.items()):
         try:
@@ -110,7 +111,97 @@ def list():
             desc = skin.description or "(no description)"
         except Exception:
             desc = "(failed to load)"
-        typer.echo(f"  {name:20s}  {desc}")
+        marker = " ← active" if name == active else ""
+        typer.echo(f"  {name:20s}  {desc}{marker}")
+    if active and active not in skins:
+        typer.echo(f"\n  note: active skin '{active}' (from config.yaml) is not installed here.")
+
+
+def _fg_dim(text: str) -> str:
+    if not _color_enabled():
+        return text
+    return f"\033[2m{text}\033[0m"
+
+
+@app.command()
+def validate(
+    file: str = typer.Argument(None, help="Path to a skin YAML file. If omitted, validates all installed skins."),
+    contrast: bool = typer.Option(True, "--contrast/--no-contrast", help="Also check WCAG AA contrast on status-bar pairs."),
+    min_ratio: float = typer.Option(4.5, "--min-ratio", help="Minimum WCAG ratio for text pairs (dim pairs use 3.0)."),
+):
+    """Validate a skin file (or all installed skins): schema + WCAG contrast.
+
+    Exit code 0 = all valid, 1 = any errors. Warnings don't affect the exit
+    code; errors are missing name, invalid hex, or unreadable status bar.
+    """
+    from .generators import contrast_ratio
+
+    targets: list[tuple[str, Path, Skin | None, str | None]] = []
+    if file:
+        p = Path(file)
+        if not p.exists():
+            typer.echo(f"File not found: {p}", err=True)
+            raise typer.Exit(1)
+        try:
+            targets.append((p.name, p, Skin.load(p), None))
+        except Exception as e:
+            typer.echo(f"✗ {p.name}: invalid skin file: {e}", err=True)
+            raise typer.Exit(1)
+    else:
+        skins = installed_skins()
+        if not skins:
+            typer.echo("No skins installed in ~/.hermes/skins/ (nothing to validate).")
+            return
+        for name, p in sorted(skins.items()):
+            try:
+                targets.append((name, p, Skin.load(p), None))
+            except Exception as e:
+                targets.append((name, p, None, str(e)))
+
+    had_error = False
+    for label, path, skin, load_err in targets:
+        if load_err is not None:
+            typer.echo(f"✗ {label}: {load_err}", err=True)
+            had_error = True
+            continue
+        warnings = skin.validate()
+        # WCAG check on the pairs that actually render as text-on-background
+        contrast_errors: list[str] = []
+        if contrast:
+            pairs = [
+                ("status_bar_text", skin.colors.status_bar_bg, min_ratio),
+                ("status_bar_strong", skin.colors.status_bar_bg, min_ratio),
+                ("status_bar_dim", skin.colors.status_bar_bg, 3.0),
+                ("status_bar_good", skin.colors.status_bar_bg, min_ratio),
+                ("status_bar_warn", skin.colors.status_bar_bg, min_ratio),
+                ("status_bar_bad", skin.colors.status_bar_bg, min_ratio),
+                ("status_bar_critical", skin.colors.status_bar_bg, min_ratio),
+            ]
+            for slot, bg, need in pairs:
+                fg = getattr(skin.colors, slot)
+                try:
+                    ratio = contrast_ratio(fg, bg)
+                except (ValueError, AttributeError):
+                    continue  # invalid hex already reported by validate()
+                if ratio < need:
+                    contrast_errors.append(
+                        f"colors.{slot} on {bg}: {ratio:.2f}:1 < {need}:1"
+                    )
+        if not warnings and not contrast_errors:
+            typer.echo(f"✓ {label}: valid (29 colors, status bar ≥ {min_ratio}:1)")
+            continue
+        had_error = had_error or bool(contrast_errors)
+        if warnings:
+            typer.echo(f"⚠ {label}: {len(warnings)} warning(s):")
+            for w in warnings:
+                typer.echo(f"  · {w}")
+        if contrast_errors:
+            typer.echo(f"✗ {label}: {len(contrast_errors)} contrast error(s):", err=True)
+            for e in contrast_errors:
+                typer.echo(f"  · {e}", err=True)
+
+    if had_error:
+        raise typer.Exit(1)
 
 
 @app.command()
@@ -159,10 +250,6 @@ def preview(
         raise typer.Exit(1)
 
     typer.echo(render_preview(skin))
-
-
-def _fg_dim(text: str) -> str:
-    return f"\033[2m{text}\033[0m"
 
 
 @app.command()
