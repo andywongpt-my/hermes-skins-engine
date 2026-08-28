@@ -14,8 +14,10 @@ from .core import Skin
 
 def _rgb(hex_color: str) -> tuple[int, int, int] | None:
     """Parse #RRGGBB to an (r, g, b) tuple. Returns None on malformed input
-    so a broken installed skin previews with validation warnings instead of
-    crashing (audit B2)."""
+    (including non-string values from hand-edited YAML) so a broken installed
+    skin previews with validation warnings instead of crashing (audit B2)."""
+    if not isinstance(hex_color, str):
+        return None
     h = hex_color.strip().lstrip("#")
     if len(h) < 6:
         return None

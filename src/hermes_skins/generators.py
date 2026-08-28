@@ -41,7 +41,10 @@ def hex_to_hsl(hex_color: str) -> tuple[float, float, float]:
 def hsl_to_hex(h: float, s: float, l: float) -> str:
     """(h, s, l) → #RRGGBB  h:0-360, s:0-1, l:0-1"""
     r, g, b = colorsys.hls_to_rgb(h / 360 % 1, l, s)
-    return f"#{int(r * 255):02X}{int(g * 255):02X}{int(b * 255):02X}"
+    # round() instead of int() truncation avoids 1-bit drift on the
+    # fractional edge (e.g. 50.99999 → 0x33, not 0x32)
+    clamp = lambda v: max(0, min(255, round(v * 255)))
+    return f"#{clamp(r):02X}{clamp(g):02X}{clamp(b):02X}"
 
 
 def adjust_lightness(hex_color: str, delta: float) -> str:

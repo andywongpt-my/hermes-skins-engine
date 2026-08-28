@@ -16,6 +16,7 @@ Usage:
 from __future__ import annotations
 
 import sys
+import re
 import shutil
 from enum import Enum
 from pathlib import Path
@@ -231,8 +232,9 @@ def custom(
     switch: bool = typer.Option(False, "--switch", help="Switch Hermes to this skin after generating"),
 ):
     """Generate a custom skin from a base color and harmony."""
-    if not color.startswith("#") or len(color) not in (7, 9):
-        typer.echo(f"Invalid color: {color!r}. Expected #RRGGBB format.", err=True)
+    color = color.strip()
+    if not re.fullmatch(r"#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?", color):
+        typer.echo(f"Invalid color: {color!r}. Expected #RRGGBB (optional #RRGGBBAA).", err=True)
         raise typer.Exit(1)
 
     skin = generate_custom(
@@ -250,7 +252,7 @@ def custom(
         path = hermes_skins_dir() / f"{skin.name}.yaml"
         skin.dump(path)
     typer.echo(f"✓ Generated custom skin '{skin.name}' → {path}")
-    typer.echo(f"  Base: {color}  Harmony: {harmony}")
+    typer.echo(f"  Base: {color}  Harmony: {harmony.value}")
     if switch:
         _do_switch(skin.name)
 
@@ -293,12 +295,21 @@ def install(file: str = typer.Argument(..., help="Path to a skin YAML file")):
             raise typer.Exit(1)
 
     hermes_skins_dir().mkdir(parents=True, exist_ok=True)
-    dst = hermes_skins_dir() / f"{skin.name}.yaml"
+    # Sanitize the destination: skin.name comes from untrusted YAML, so a
+    # name like "../../tmp/evil" or "sub/x" must never escape the skins dir.
+    safe_name = Path(skin.name).name
+    if safe_name in ("", ".", ".."):
+        typer.echo(f"✗ Invalid skin name: {skin.name!r}", err=True)
+        raise typer.Exit(1)
+    dst = hermes_skins_dir() / f"{safe_name}.yaml"
+    if dst.exists() and src.resolve() == dst.resolve():
+        typer.echo(f"✓ {src.name} is already installed as '{safe_name}.yaml'. Nothing to do.")
+        return
     shutil.copy2(src, dst)
     typer.echo(f"✓ Installed {src.name} → {dst}")
-    if skin.name != src.stem:
-        typer.echo(f"  (saved as '{skin.name}.yaml' to match the skin's internal name)")
-    typer.echo(f"  Activate: hermes config set display.skin {skin.name}")
+    if safe_name != src.stem:
+        typer.echo(f"  (saved as '{safe_name}.yaml' to match the skin's internal name)")
+    typer.echo(f"  Activate: hermes config set display.skin {safe_name}")
 
 
 @app.command()
