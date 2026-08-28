@@ -64,8 +64,11 @@ class Colors:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Colors":
+        # YAML "colors: null" parses as None — treat as absent (AGY P2 #3)
+        if not isinstance(d, dict):
+            d = {}
         known = {f.name for f in cls.__dataclass_fields__.values()}
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return cls(**{k: v for k, v in (d or {}).items() if k in known})
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -80,8 +83,19 @@ class Spinner:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Spinner":
+        # YAML "colors: null" parses as None — treat as absent (AGY P2 #3)
+        if not isinstance(d, dict):
+            d = {}
         known = {f.name for f in cls.__dataclass_fields__.values()}
-        return cls(**{k: v for k, v in d.items() if k in known})
+        kwargs = {k: v for k, v in (d or {}).items() if k in known}
+        # Non-sequence faces (e.g. a bare string) would break len()/iteration
+        # downstream (AGY P2 #7) — coerce to defaults.
+        for key in ("waiting_faces", "thinking_faces"):
+            if key in kwargs and not isinstance(kwargs[key], (list, tuple)):
+                kwargs[key] = list(kwargs[key]) if kwargs[key] else None
+                if kwargs[key] is None:
+                    kwargs.pop(key)
+        return cls(**kwargs)
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -98,8 +112,11 @@ class Branding:
 
     @classmethod
     def from_dict(cls, d: dict) -> "Branding":
+        # YAML "colors: null" parses as None — treat as absent (AGY P2 #3)
+        if not isinstance(d, dict):
+            d = {}
         known = {f.name for f in cls.__dataclass_fields__.values()}
-        return cls(**{k: v for k, v in d.items() if k in known})
+        return cls(**{k: v for k, v in (d or {}).items() if k in known})
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -153,9 +170,10 @@ class Skin:
             schema_version=d.get("schema_version", SCHEMA_VERSION),
             author=d.get("author", ""),
             tags=list(d.get("tags", [])) if isinstance(d.get("tags", []), list) else [],
-            colors=Colors.from_dict(d.get("colors", {})),
-            spinner=Spinner.from_dict(d.get("spinner", {})),
-            branding=Branding.from_dict(d.get("branding", {})),
+            # `or {}` guards explicit YAML nulls (colors: null etc. — AGY P2 #3)
+            colors=Colors.from_dict(d.get("colors") or {}),
+            spinner=Spinner.from_dict(d.get("spinner") or {}),
+            branding=Branding.from_dict(d.get("branding") or {}),
             tool_prefix=d.get("tool_prefix", "┊"),
             tool_emojis=d.get("tool_emojis", {}),
             banner_logo=d.get("banner_logo"),
@@ -226,7 +244,10 @@ class Skin:
         for slot, hexval in self.colors.to_dict().items():
             if not (isinstance(hexval, str) and hex_re.match(hexval)):
                 warnings.append(f"colors.{slot} = {hexval!r} is not a valid #RRGGBB hex")
-        if len(self.spinner.waiting_faces) < 2:
+        # Type-guard: a malformed skin can carry null/non-sequence faces
+        # (AGY P2 #7) — report a warning instead of raising TypeError.
+        faces = self.spinner.waiting_faces
+        if not isinstance(faces, (list, tuple)) or len(faces) < 2:
             warnings.append("spinner.waiting_faces should have at least 2 entries for animation")
         return warnings
 

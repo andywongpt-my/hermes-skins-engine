@@ -1,0 +1,50 @@
+# Post-Dev Audit Summary: `hermes-skins-engine` P2 Cycle (`f83bc5c`)
+
+The complete audit findings report has been generated and written to [`audit-brain/p2-findings.md`](file:///home/meow/hermes-skins-engine/audit-brain/p2-findings.md).
+
+---
+
+### Verification Summary
+- **Test Suite**: 211 tests passed (`.venv/bin/python -m pytest tests/ -q`).
+- **Compilation**: Clean bytecode compilation across all modules (`python3 -m py_compile src/hermes_skins/*.py`).
+- **Diff Analysis**: Full line-by-line review of commit diff `10e2bdc..f83bc5c` (+1065 / -61 lines).
+
+---
+
+### Summary of Specific Review Questions
+
+1. **F2 Light Branch Coherence**: Surfaces and basic ink slots are coherent and dark ($L \in [0.10, 0.22]$). However, `bright` ($L=0.55$) and extended harmony hues (`pastel`/`neon`) flow into `session_label` and `ui_label` without contrast clamping, dropping contrast to **$1.16:1$ – $1.72:1$** against light surfaces for certain palettes.
+2. **F12 Extra Keys & Shadowing**: Known top-level fields in `_KNOWN_TOP_KEYS` cannot be shadowed by `Skin.extra`. A crash bug was identified where YAML explicit `null` fields (e.g. `colors: null`) cause `Skin.from_dict` to raise `AttributeError`.
+3. **F7 Rename Idempotency**: Same-name rename `rename("asuka", "asuka")` is idempotent and safely updates metadata in-place. A collision risk exists if a destination `.yaml` file exists with a different internal name.
+4. **F7 Uninstall `--force`**: Active skin guard works correctly; `--force` is required to uninstall the active skin.
+5. **F9 Banner Sync Regex & Lightness**: Whitespace normalization works properly (`[bold   #HEX]`). 8-digit hexes are ignored (unchanged). Equal lightness colors preserve document appearance order stably without crashing.
+6. **F5 Diff Robustness**: `_channels()` safely handles 8-digit hexes and malformed inputs. All 6 queried `Branding` attributes exist on the dataclass.
+7. **CLI Enum Definitions**: `Harmony` and `Mode` enums are cleanly placed at top-level before `app` with no forward-reference issues.
+8. **Picker Terminal Handling**: Raw terminal restoration via `finally:` is guaranteed. However, a **High-severity bug** was discovered: `strip_ansi()` is called on the preview string, rendering the picker completely monochrome without color.
+9. **Watch Loop**: Polling with `time.sleep(interval)` consumes negligible CPU; missing/deleted file transitions are handled gracefully.
+10. **Install-URL & Non-Interactive Safety**: Non-interactive execution auto-answers `"y"` to warnings. However, the `--force` flag in `install-url` is completely unused/ignored, and `install()` unconditionally overwrites existing skins.
+11. **Test Suite Stability**: Order-independent assertions and deterministic seed hashes are used throughout.
+12. **EVA Templates Output**: All 8 EVA templates retain byte-identical 29-slot dark palettes compared to 0.2.0; banner art is synced by design.
+
+---
+
+### Defect Findings Overview
+
+| Severity | File:Line | Issue Description |
+| :--- | :--- | :--- |
+| **HIGH** | [`cli.py:727`](file:///home/meow/hermes-skins-engine/src/hermes_skins/cli.py#L727) | `picker` calls `strip_ansi(render_preview(skin))`, stripping all colors in interactive preview. |
+| **HIGH** | [`cli.py:688, 703`](file:///home/meow/hermes-skins-engine/src/hermes_skins/cli.py#L688), [`430`](file:///home/meow/hermes-skins-engine/src/hermes_skins/cli.py#L430) | `install-url` ignores `--force` option; `install()` unconditionally overwrites files on disk. |
+| **HIGH** | [`core.py:68, 156`](file:///home/meow/hermes-skins-engine/src/hermes_skins/core.py#L68) | `Skin.from_dict` crashes with `AttributeError` when YAML contains explicit `null` mappings. |
+| **MEDIUM** | [`generators.py:176, 211`](file:///home/meow/hermes-skins-engine/src/hermes_skins/generators.py#L176) | Light mode contrast drops below WCAG AA for `session_label`, `bright`, and `pastel`/`neon` harmonies. |
+| **MEDIUM** | [`generators.py:153-157`](file:///home/meow/hermes-skins-engine/src/hermes_skins/generators.py#L153-L157) | `tetradic` harmony is implemented with 90° intervals, making it identical to `square`. |
+| **MEDIUM** | [`cli.py:538, 574`](file:///home/meow/hermes-skins-engine/src/hermes_skins/cli.py#L538) | `rename` and `clone` check only internal names, risking silent overwrite of existing disk files. |
+| **LOW** | [`core.py:229`](file:///home/meow/hermes-skins-engine/src/hermes_skins/core.py#L229) | `Skin.validate()` raises `TypeError` if `spinner.waiting_faces` is `null` or non-sequence. |
+| **LOW** | [`cli.py:674`](file:///home/meow/hermes-skins-engine/src/hermes_skins/cli.py#L674) | `_fetch_url` gist regex only matches lowercase hex gist IDs. |
+| **NIT** | [`test_p2_features.py:242`](file:///home/meow/hermes-skins-engine/tests/test_p2_features.py#L242) | Dead `if False` ternary expression in `test_sync_empty_art_passthrough`. |
+
+---
+
+**VERDICT: PASS-WITH-FINDINGS**
+
+The P2 feature cycle delivers significant functional expansions with high test coverage and solid core architecture. The color derivation maintains regression compatibility for all 8 EVA templates in dark mode, and the CLI surface integrates cleanly. However, deployment to production should address the High severity findings—specifically re-enabling ANSI color rendering in the `picker`, fixing the unhandled `NoneType` crashes in `Skin.from_dict`/`validate`, wiring the `--force` flag in `install-url`, and clamping light-mode contrast on extended harmony slots.
+AGY-EXIT:0

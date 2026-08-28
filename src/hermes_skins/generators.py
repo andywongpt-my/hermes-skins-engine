@@ -150,7 +150,9 @@ def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = 
     # Extended harmonies (audit F11): three more hues on the wheel are
     # exported as secondary_colors so callers can theme extra UI slots.
     elif harmony == "tetradic":
-        accent_h = (h + 90) % 360
+        # Rectangular: two complementary pairs (0/60/180/240). Distinct from
+        # square's equal 90° intervals (AGY P2 #5).
+        accent_h = (h + 60) % 360
         accent_s, accent_l = s, l
     elif harmony == "square":
         accent_h = (h + 90) % 360
@@ -174,7 +176,7 @@ def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = 
     # ui_label / session_label / selection_bg downstream via generate_skin.
     # For the classic five harmonies these fall back to derived shades.
     if harmony == "tetradic":
-        second_h, third_h = (h + 180) % 360, (h + 270) % 360
+        second_h, third_h = (h + 180) % 360, (h + 240) % 360
         second_s_l, third_s_l = (s, l), (s, l)
     elif harmony == "square":
         second_h, third_h = (h + 180) % 360, (h + 270) % 360
@@ -208,11 +210,14 @@ def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = 
         )
         dark = hsl_to_hex(h, s * 0.8, text_l_low)          # darkest ink — borders
         dim = hsl_to_hex(h, s * 0.3, 0.35)                 # muted ink
-        bright = hsl_to_hex(h, s * 0.9, 0.55)              # mid-tone highlight
         text = hsl_to_hex(h, s * 0.1, text_l_high)         # body text ink
 
         # Status bar — light tinted surface with dark ink
         status_bg = hsl_to_hex(h, s * 0.25, surface_l_low)
+
+        # Mid-tone highlight must stay readable on the light surface
+        # (AGY P2 #4: L=0.55 gave 1.45:1 on yellow bases).
+        bright = ensure_contrast(hsl_to_hex(h, s * 0.9, 0.40), status_bg, 4.5)
 
         # Semantic colors — clamped against the light surface (darker side)
         ok = ensure_contrast("#008000", status_bg, 4.5)
@@ -276,6 +281,15 @@ def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = 
     _extended = harmony in ("tetradic", "square", "pastel", "neon")
     label_hue = secondary if _extended else accent
     session_hue = tertiary if _extended else bright
+    if mode == "light":
+        # Extended-harmony hues can be lifted (pastel L≤0.85, neon L=0.60);
+        # on near-white surfaces that was 1.16-1.72:1 (AGY P2 #4). Clamp
+        # against the actual light surface. The accent (and label derived
+        # from it) also needs clamping: mid-tone accents measured 4.29:1 on
+        # some bases (AGY P2 #4 follow-up).
+        label_hue = ensure_contrast(label_hue, status_bg, 4.5)
+        session_hue = ensure_contrast(session_hue, status_bg, 4.5)
+        accent = ensure_contrast(accent, status_bg, 4.5)
 
     return Colors(
         banner_border=dark,

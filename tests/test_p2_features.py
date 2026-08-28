@@ -239,7 +239,9 @@ class TestBannerSync:
         assert out.endswith("mono[/]")
 
     def test_sync_empty_art_passthrough(self):
-        assert sync_banner_art("", None) == "" if False else sync_banner_art("", generate_from_template("rei").colors) == ""
+        colors = generate_from_template("rei").colors
+        assert sync_banner_art("", colors) == ""
+        assert sync_banner_art("no tags here", colors) == "no tags here"
 
     def test_all_templates_synced(self):
         for t in THEMES:
@@ -399,3 +401,116 @@ class TestPickerWatchSmoke:
         assert result.exit_code == 0
         for cmd in ("uninstall", "rename", "clone", "diff", "install-url", "picker", "watch"):
             assert cmd in result.output
+
+
+# ---------------------------------------------------------------------------
+# AGY P2 audit regression tests (findings #1-#9)
+# ---------------------------------------------------------------------------
+
+class TestAGYP2Regressions:
+    def test_f3_null_section_yaml_loads(self, tmp_path):
+        p = tmp_path / "nulls.yaml"
+        p.write_text("name: nulls\ncolors: null\nspinner: null\nbranding: null\n", encoding="utf-8")
+        skin = Skin.load(p)  # must not raise
+        assert skin.name == "nulls"
+        assert skin.colors.ui_accent.startswith("#")
+
+    def test_f7_validate_null_faces_no_crash(self):
+        # Spinner.from_dict coerces null faces to defaults; validate must not
+        # raise and the resulting skin must be usable.
+        skin = Skin.from_dict({"name": "x", "spinner": {"waiting_faces": None}})
+        assert skin.validate() is not None  # no TypeError
+        assert len(skin.spinner.waiting_faces) >= 2
+
+    def test_f7_validate_string_faces_no_crash(self):
+        skin = Skin.from_dict({"name": "x", "spinner": {"waiting_faces": "not-a-list"}})
+        assert skin.validate() is not None
+        assert isinstance(skin.spinner.waiting_faces, (list, tuple))
+
+    def test_f7_validate_direct_null_faces_warns(self):
+        # When the dataclass itself carries a null (bypassing from_dict),
+        # validate() warns instead of raising.
+        skin = Skin(name="x")
+        object.__setattr__(skin.spinner, "waiting_faces", None) if False else setattr(skin.spinner, "waiting_faces", None)
+        warnings = skin.validate()
+        assert any("waiting_faces" in w for w in warnings)
+
+    def test_f1_picker_preview_keeps_ansi(self, monkeypatch):
+        # The picker frame must NOT strip ANSI (render_preview handles NO_COLOR)
+        import inspect
+        from hermes_skins import cli
+        src = inspect.getsource(cli._render_picker_screen)
+        assert "strip_ansi(render_preview" not in src
+        assert "render_preview(skin)" in src
+
+    def test_f2_install_refuses_overwrite_without_force(self, isolated_home):
+        r1 = runner.invoke(app, ["generate", "asuka"])
+        assert r1.exit_code == 0
+        # Write a modified skin and try to install over it
+        import yaml as _yaml
+        p = isolated_home / "other.yaml"
+        skin_data = _yaml.safe_load((isolated_home / ".hermes" / "skins" / "asuka.yaml").read_text(encoding="utf-8"))
+        skin_data["description"] = "modified"
+        p.write_text(_yaml.safe_dump(skin_data, allow_unicode=True), encoding="utf-8")
+        r2 = runner.invoke(app, ["install", str(p)])
+        assert r2.exit_code == 1
+        assert "--force" in r2.output
+        r3 = runner.invoke(app, ["install", str(p), "--force"])
+        assert r3.exit_code == 0, r3.output
+
+    def test_f2_install_url_passes_force(self, isolated_home, monkeypatch):
+        monkeypatch.setattr(cli_mod, "_fetch_url", lambda url, timeout=15.0: TestInstallUrl.SKIN_YAML)
+        r1 = runner.invoke(app, ["install-url", "https://example.com/s.yaml"])
+        assert r1.exit_code == 0
+        # Second install without --force must refuse
+        r2 = runner.invoke(app, ["install-url", "https://example.com/s.yaml"])
+        assert r2.exit_code == 1
+        assert "--force" in r2.output
+
+    def test_f4_tetradic_differs_from_square(self):
+        a = generate_palette("#CC0033", "tetradic").to_dict()
+        b = generate_palette("#CC0033", "square").to_dict()
+        assert a != b, "tetradic (rectangular) must be distinct from square"
+
+    def test_f5_light_mode_extended_harmony_contrast(self):
+        for base in ("#3B7EC4", "#FFCC00", "#2B7A2B"):
+            for harmony in ("tetradic", "square", "pastel", "neon", "complementary", "monochrome"):
+                c = generate_palette(base, harmony, mode="light")
+                for slot in ("ui_label", "session_label", "banner_accent", "ui_accent"):
+                    r = contrast_ratio(getattr(c, slot), c.status_bar_bg)
+                    assert r >= 4.5, f"{base}/{harmony}/{slot}: {r:.2f}:1"
+
+    def test_f5_light_mode_yellow_banner_accent(self):
+        c = generate_palette("#FFCC00", "complementary", mode="light")
+        assert contrast_ratio(c.banner_accent, c.status_bar_bg) >= 4.5
+
+    def test_f6_rename_guards_physical_file(self, isolated_home):
+        # File on disk whose internal name differs from its stem
+        skins_dir = isolated_home / ".hermes" / "skins"
+        skins_dir.mkdir(parents=True)
+        (skins_dir / "zzz.yaml").write_text("name: asuka\n", encoding="utf-8")
+        r = runner.invoke(app, ["generate", "rei", "-o", str(skins_dir / "rei.yaml")])
+        assert r.exit_code == 0
+        # rename rei → zzz: 'zzz' is not a lookup key (internal name 'asuka'),
+        # but zzz.yaml exists on disk → must refuse, not overwrite
+        r2 = runner.invoke(app, ["rename", "rei", "zzz"])
+        assert r2.exit_code == 1
+        assert (skins_dir / "zzz.yaml").read_text(encoding="utf-8").startswith("name: asuka")
+
+    def test_f6_clone_guards_physical_file(self, isolated_home):
+        skins_dir = isolated_home / ".hermes" / "skins"
+        skins_dir.mkdir(parents=True)
+        (skins_dir / "taken.yaml").write_text("name: different-skin\n", encoding="utf-8")
+        r = runner.invoke(app, ["clone", "asuka", "taken"])
+        assert r.exit_code == 1
+        assert (skins_dir / "taken.yaml").read_text(encoding="utf-8").startswith("name: different-skin")
+
+    def test_f8_gist_uppercase_id_resolves(self, monkeypatch):
+        captured = {}
+        def fake_urlopen(req, timeout):
+            captured["url"] = req.full_url
+            raise OSError("stop here")  # don't actually fetch
+        monkeypatch.setattr(cli_mod.urllib.request, "urlopen", fake_urlopen)
+        with pytest.raises(OSError):
+            cli_mod._fetch_url("https://gist.github.com/user/A1B2C3D4")
+        assert captured["url"].startswith("https://gist.githubusercontent.com/")

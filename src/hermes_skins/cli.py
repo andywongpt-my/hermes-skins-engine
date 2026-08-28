@@ -384,12 +384,16 @@ def custom(
 
 
 @app.command()
-def install(file: str = typer.Argument(..., help="Path to a skin YAML file")):
+def install(
+    file: str = typer.Argument(..., help="Path to a skin YAML file"),
+    force: bool = typer.Option(False, "--force", "-f", help="Overwrite an installed skin with the same name"),
+):
     """Validate and install a skin file to ~/.hermes/skins/.
 
     The file is parsed and validated before landing in the skins directory,
     and is saved under the skin's internal name so lookups stay consistent
-    (audit B9).
+    (audit B9). Existing skins are never silently overwritten without
+    --force (AGY P2 #2).
     """
     src = Path(file)
     if not src.exists():
@@ -431,6 +435,10 @@ def install(file: str = typer.Argument(..., help="Path to a skin YAML file")):
     if dst.exists() and src.resolve() == dst.resolve():
         typer.echo(f"✓ {src.name} is already installed as '{safe_name}.yaml'. Nothing to do.")
         return
+    if dst.exists() and not force:
+        typer.echo(f"✗ A skin named '{safe_name}' is already installed: {dst}", err=True)
+        typer.echo("  Re-run with --force to overwrite it.", err=True)
+        raise typer.Exit(1)
     shutil.copy2(src, dst)
     typer.echo(f"✓ Installed {src.name} → {dst}")
     if safe_name != src.stem:
@@ -535,7 +543,11 @@ def rename(
     if safe_new in ("", ".", ".."):
         typer.echo(f"✗ Invalid new name: {new!r}", err=True)
         raise typer.Exit(1)
-    if safe_new in installed_skins() and safe_new != old:
+    dst = hermes_skins_dir() / f"{safe_new}.yaml"
+    # Guard BOTH the lookup registry (internal names) and the physical file:
+    # a file can exist on disk whose internal name differs from its stem
+    # (AGY P2 #6).
+    if safe_new != old and (safe_new in installed_skins() or dst.exists()):
         typer.echo(f"✗ A skin named '{safe_new}' already exists.", err=True)
         raise typer.Exit(1)
     try:
@@ -544,7 +556,6 @@ def rename(
         typer.echo(f"✗ Cannot load '{old}': {e}", err=True)
         raise typer.Exit(1)
     skin.name = safe_new
-    dst = hermes_skins_dir() / f"{safe_new}.yaml"
     skin.dump(dst)
     if dst.resolve() != path.resolve():
         path.unlink(missing_ok=True)
@@ -574,9 +585,14 @@ def clone(
     if safe_new in installed_skins():
         typer.echo(f"✗ A skin named '{safe_new}' already exists.", err=True)
         raise typer.Exit(1)
+    dst = hermes_skins_dir() / f"{safe_new}.yaml"
+    # Physical-file guard mirrors rename (AGY P2 #6): a file can exist on
+    # disk whose internal name differs from the lookup registry.
+    if dst.exists():
+        typer.echo(f"✗ A skin named '{safe_new}' already exists: {dst}", err=True)
+        raise typer.Exit(1)
     skin.name = safe_new
     hermes_skins_dir().mkdir(parents=True, exist_ok=True)
-    dst = hermes_skins_dir() / f"{safe_new}.yaml"
     skin.dump(dst)
     typer.echo(f"✓ Cloned '{name}' → '{safe_new}' ({dst})")
     typer.echo(f"  Activate: hermes-skins switch {safe_new}")
@@ -671,7 +687,7 @@ def _fetch_url(url: str, timeout: float = 15.0) -> str:
     Gist URLs (gist.github.com/<user>/<id>) are auto-resolved to the raw URL.
     """
     # Gist convenience: resolve to raw
-    m = re.match(r"https://gist\.github\.com/([^/]+)/([0-9a-f]+)$", url.rstrip("/"))
+    m = re.match(r"https://gist\.github\.com/([^/]+)/([0-9a-zA-Z]+)$", url.rstrip("/"))
     if m:
         url = f"https://gist.githubusercontent.com/{m.group(1)}/{m.group(2)}/raw"
     if not re.match(r"^https?://", url):
@@ -700,7 +716,7 @@ def install_url(
         tmp = Path(tf.name)
     try:
         # Reuse the install command's validation and path handling
-        install(file=str(tmp))
+        install(file=str(tmp), force=force)
     finally:
         tmp.unlink(missing_ok=True)
 
@@ -724,7 +740,9 @@ def _render_picker_screen(skins: dict[str, Path], themes: list[str], active: str
     try:
         skin = Skin.load(src) if kind == "installed" else generate_from_template(name)
         lines.append("")
-        lines.append(strip_ansi(render_preview(skin)))
+        # render_preview already honors NO_COLOR internally; stripping here
+        # made the interactive preview monochrome (AGY P2 #1).
+        lines.append(render_preview(skin))
     except Exception as e:
         lines.append(f"  (preview failed: {e})")
     return "\n".join(lines)
