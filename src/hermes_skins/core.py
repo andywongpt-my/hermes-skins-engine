@@ -8,6 +8,7 @@ extensible without breaking existing skins.
 
 from __future__ import annotations
 
+import re
 import yaml
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
@@ -177,8 +178,11 @@ class Skin:
         warnings: list[str] = []
         if not self.name:
             warnings.append("name is empty")
+        # Strict hex: '#' + 6 hex digits, optional 2-digit alpha. Catches
+        # "#ZZZZZZ" (wrong chars) that a length-only check would pass.
+        hex_re = re.compile(r"^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$")
         for slot, hexval in self.colors.to_dict().items():
-            if not (isinstance(hexval, str) and hexval.startswith("#") and len(hexval) in (7, 9)):
+            if not (isinstance(hexval, str) and hex_re.match(hexval)):
                 warnings.append(f"colors.{slot} = {hexval!r} is not a valid #RRGGBB hex")
         if len(self.spinner.waiting_faces) < 2:
             warnings.append("spinner.waiting_faces should have at least 2 entries for animation")

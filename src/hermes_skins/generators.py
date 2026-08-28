@@ -10,6 +10,7 @@ from __future__ import annotations
 import colorsys
 import hashlib
 import random
+import re
 from dataclasses import replace
 from typing import Optional
 
@@ -20,11 +21,21 @@ from .core import Skin, Colors, Spinner, Branding
 # ---------------------------------------------------------------------------
 
 def hex_to_hsl(hex_color: str) -> tuple[float, float, float]:
-    """#RRGGBB → (h, s, l)  h:0-360, s:0-1, l:0-1"""
-    hex_color = hex_color.lstrip("#")
-    r, g, b = int(hex_color[0:2], 16) / 255, int(hex_color[2:4], 16) / 255, int(hex_color[4:6], 16) / 255
-    h, s, l = colorsys.rgb_to_hls(r, g, b)
-    return h * 360, s, l
+    """#RRGGBB (or #RRGGBBAA) → (h, s, l)  h:0-360, s:0-1, l:0-1
+
+    NOTE: colorsys.rgb_to_hls returns (h, L, S) — lightness BEFORE saturation.
+    Alpha channel (if present) is accepted but ignored: terminal themes are
+    opaque, and the 29 Hermes slots have no alpha semantics.
+    """
+    m = re.fullmatch(r"#([0-9a-fA-F]{6})(?:[0-9a-fA-F]{2})?", hex_color.strip())
+    if not m:
+        raise ValueError(
+            f"Invalid color {hex_color!r}: expected #RRGGBB (6 hex digits, optional alpha)"
+        )
+    h = m.group(1)
+    r, g, b = int(h[0:2], 16) / 255, int(h[2:4], 16) / 255, int(h[4:6], 16) / 255
+    hh, ll, ss = colorsys.rgb_to_hls(r, g, b)  # contract: (h, l, s) — do not reorder
+    return hh * 360, ss, ll
 
 
 def hsl_to_hex(h: float, s: float, l: float) -> str:
@@ -43,6 +54,52 @@ def adjust_saturation(hex_color: str, factor: float) -> str:
     """Multiply saturation by factor."""
     h, s, l = hex_to_hsl(hex_color)
     return hsl_to_hex(h, max(0, min(1, s * factor)), l)
+
+
+def _relative_luminance(hex_color: str) -> float:
+    """WCAG 2.1 relative luminance of a #RRGGBB color."""
+    rgb = [int(hex_color.lstrip("#")[i:i+2], 16) / 255 for i in (0, 2, 4)]
+    lin = [c / 12.92 if c <= 0.03928 else ((c + 0.055) / 1.055) ** 2.4 for c in rgb]
+    return 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2]
+
+
+def contrast_ratio(hex1: str, hex2: str) -> float:
+    """WCAG 2.1 contrast ratio between two colors (1.0 – 21.0)."""
+    l1, l2 = _relative_luminance(hex1), _relative_luminance(hex2)
+    lighter, darker = max(l1, l2), min(l1, l2)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def ensure_contrast(fg_hex: str, bg_hex: str, min_ratio: float = 4.5) -> str:
+    """Nudge a foreground color's lightness away from the background until the
+    WCAG contrast ratio is met (hue and saturation preserved).
+
+    Light base colors used to derive both the status-bar background AND a
+    fixed L=0.70 text, yielding unreadable ~1:1 pairs (audit: kaoru silver,
+    near-white bases). This clamps derived text/bg pairs to legibility.
+    """
+    h, s, l = hex_to_hsl(fg_hex)
+    if contrast_ratio(fg_hex, bg_hex) >= min_ratio:
+        return fg_hex
+    # Try both lightness directions and keep the smallest adjustment that
+    # meets the ratio. A single direction guess fails on mid-gray backgrounds
+    # (lightness ≈ 0.5), where pushing brighter can never exceed ~4.0:1.
+    best: tuple[float, str, float] | None = None
+    for direction in (-1, 1):
+        cur_l = l
+        for _ in range(40):
+            new_l = max(0.0, min(1.0, cur_l + direction * 0.04))
+            if new_l == cur_l:
+                break  # clamped at the boundary; this direction is exhausted
+            cur_l = new_l
+            candidate = hsl_to_hex(h, s, cur_l)
+            ratio = contrast_ratio(candidate, bg_hex)
+            if ratio >= min_ratio:
+                cand = (ratio, candidate, abs(cur_l - l))
+                if best is None or cand[2] < best[2]:
+                    best = cand
+                break
+    return best[1] if best else fg_hex
 
 
 # ---------------------------------------------------------------------------
@@ -95,12 +152,17 @@ def generate_palette(base_hex: str, harmony: str = "complementary") -> Colors:
 
     # Status bar — dark base surface with accent highlights
     status_bg = hsl_to_hex(h, s * 0.3, max(0.08, l - 0.30))
-    status_text = hsl_to_hex(h, s * 0.2, 0.70)
-    status_strong = bright
-    status_dim = hsl_to_hex(h, s * 0.2, 0.45)
+    # Derived text/strong/dim are clamped to legibility against status_bg
+    # (light bases previously produced ~1:1 pairs).
+    status_text = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.70), status_bg, 4.5)
+    status_strong = ensure_contrast(bright, status_bg, 4.5)
+    status_dim = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.45), status_bg, 3.0)
     status_good = ok
     status_warn = warn
-    status_bad = hsl_to_hex(h, min(1, s + 0.1), min(0.65, l + 0.10))
+    # Semantic "bad" color — must stay a warning hue regardless of theme base.
+    # Deriving it from the base hue made green/blue themes render "bad" as
+    # green/cyan (see audit B5).
+    status_bad = "#FF8C00"
     status_critical = error
 
     # Voice status — same dark surface
@@ -326,7 +388,7 @@ THEMES: dict[str, dict] = {
         "agent_name": "EVA-01 Agent",
         "prompt_symbol": "▶ ❯ ",
         "response_label": " ▶ EVA-01 ",
-        "waiting_faces": ["(▶)", "◁)", "(◯)", "(▬)", "(▽)"],
+        "waiting_faces": ["(▶)", "(◁)", "(◯)", "(▬)", "(▽)"],
         "thinking_faces": ["(▶)", "(▽)", "(◯)", "(▬)"],
         "thinking_verbs": [
             "synchronizing with EVA-01",
@@ -546,7 +608,7 @@ THEMES: dict[str, dict] = {
         "agent_name": "SEELE Committee",
         "prompt_symbol": "❒ ❯ ",
         "response_label": " SEELE ",
-        "waiting_faces:": ["(❒)", "(❑)", "(❏)", "(■)", "(□)"],
+        "waiting_faces": ["(❒)", "(❑)", "(❏)", "(■)", "(□)"],
         "thinking_faces": ["(❒)", "(■)", "(❑)", "(□)"],
         "thinking_verbs": [
             "convening the committee",
