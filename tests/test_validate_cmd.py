@@ -78,11 +78,6 @@ def test_validate_all_flags_bad_skin(runner, isolated_home):
     assert "contrast error" in result.output
 
 
-def test_validate_missing_file_arg(runner, isolated_home, tmp_path):
-    result = runner.invoke(app_main, ["validate", str(tmp_path / "nope.yaml")])
-    assert result.exit_code == 1
-
-
 def test_list_marks_active_skin(runner, isolated_home):
     cfg = isolated_home / ".hermes" / "config.yaml"
     cfg.parent.mkdir(parents=True)

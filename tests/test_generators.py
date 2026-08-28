@@ -168,10 +168,11 @@ def test_palette_light_base_readable():
 
 
 def test_palette_complementary_accent_differs_from_base():
+    """Complement of 345° must land near 165°, not echo the base hue
+    (audit 0.2.0 #6: the old range allowed the base hue through)."""
     colors = generate_palette("#CC0033", "complementary")
-    # complement of red-345° lands in green-cyan territory
     h, _, _ = hex_to_hsl(colors.banner_title)
-    assert 100 <= h <= 200 or h >= 340 or h <= 20  # hue math sanity, not exact
+    assert 120 <= h <= 210, f"complement hue {h} out of expected sector"
 
 
 def test_palette_harmonies_all_produce_29_slots():

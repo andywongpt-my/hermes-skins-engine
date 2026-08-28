@@ -55,7 +55,10 @@ def installed_skins() -> dict[str, Path]:
 
     Keyed by the skin's internal `name` field (falling back to the file
     stem), so renaming a file doesn't break preview/switch/export lookups
-    (audit B9).
+    (audit B9). The key is always sanitized via Path().name — an internal
+    name like "../../tmp/escaped" must never become a lookup key (audit
+    0.2.0 #11); users find skins by their filename, and install() only
+    ever writes sanitized basenames anyway.
     """
     d = hermes_skins_dir()
     if not d.exists():
@@ -66,6 +69,7 @@ def installed_skins() -> dict[str, Path]:
             key = Skin.load(f).name or f.stem
         except Exception:
             key = f.stem
+        key = Path(key).name or f.stem
         result[key] = f
     return result
 
@@ -165,6 +169,13 @@ def validate(
             had_error = True
             continue
         warnings = skin.validate()
+        # Schema errors vs warnings (audit 0.2.0 #1): a missing name or an
+        # invalid hex value makes the skin unusable — treat those as errors,
+        # not advisory warnings, so validate exits non-zero.
+        error_prefixes = ("name is empty", "is not a valid #RRGGBB hex")
+        schema_errors = [w for w in warnings if any(w.startswith(p) or p in w for p in error_prefixes)]
+        schema_warnings = [w for w in warnings if w not in schema_errors]
+        had_error = had_error or bool(schema_errors)
         # WCAG check on the pairs that actually render as text-on-background
         contrast_errors: list[str] = []
         if contrast:
@@ -182,18 +193,24 @@ def validate(
                 try:
                     ratio = contrast_ratio(fg, bg)
                 except (ValueError, AttributeError):
-                    continue  # invalid hex already reported by validate()
+                    continue  # invalid hex already reported as a schema error
                 if ratio < need:
                     contrast_errors.append(
                         f"colors.{slot} on {bg}: {ratio:.2f}:1 < {need}:1"
                     )
-        if not warnings and not contrast_errors:
-            typer.echo(f"✓ {label}: valid (29 colors, status bar ≥ {min_ratio}:1)")
+            had_error = had_error or bool(contrast_errors)
+        if not schema_errors and not schema_warnings and not contrast_errors:
+            ok_msg = f"✓ {label}: valid (29 colors"
+            ok_msg += f", status bar ≥ {min_ratio}:1)" if contrast else ")"
+            typer.echo(ok_msg)
             continue
-        had_error = had_error or bool(contrast_errors)
-        if warnings:
-            typer.echo(f"⚠ {label}: {len(warnings)} warning(s):")
-            for w in warnings:
+        if schema_errors:
+            typer.echo(f"✗ {label}: {len(schema_errors)} schema error(s):", err=True)
+            for e in schema_errors:
+                typer.echo(f"  · {e}", err=True)
+        if schema_warnings:
+            typer.echo(f"⚠ {label}: {len(schema_warnings)} warning(s):")
+            for w in schema_warnings:
                 typer.echo(f"  · {w}")
         if contrast_errors:
             typer.echo(f"✗ {label}: {len(contrast_errors)} contrast error(s):", err=True)
@@ -333,10 +350,14 @@ def custom(
         description=description,
     )
 
+    # skin.name flows from user input; a traversal-ish name must never become
+    # a filesystem path (audit 0.2.0 #2). Explicit --output paths are honored
+    # as given; only the derived default is sanitized.
+    safe_name = Path(skin.name).name or "custom"
     if output:
         path = skin.dump(output)
     else:
-        path = hermes_skins_dir() / f"{skin.name}.yaml"
+        path = hermes_skins_dir() / f"{safe_name}.yaml"
         skin.dump(path)
     typer.echo(f"✓ Generated custom skin '{skin.name}' → {path}")
     typer.echo(f"  Base: {color}  Harmony: {harmony.value}")
@@ -437,7 +458,10 @@ def export(
         typer.echo(f"Skin '{name}' not found.", err=True)
         raise typer.Exit(1)
 
-    out_path = output or f"{skin.name}.yaml"
+    # skin.name comes from untrusted YAML — never let it become a traversal
+    # path when deriving the default output name (audit 0.2.0 #2).
+    safe_name = Path(skin.name).name or "skin"
+    out_path = output or f"{safe_name}.yaml"
     skin.dump(out_path)
     typer.echo(f"✓ Exported '{skin.name}' → {out_path}")
 

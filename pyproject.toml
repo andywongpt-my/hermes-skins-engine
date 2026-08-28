@@ -38,6 +38,8 @@ dev = ["pytest>=8.0"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+# src layout: pytest must find hermes_skins even without `pip install -e .`
+pythonpath = ["src"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/hermes_skins"]

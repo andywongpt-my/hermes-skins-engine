@@ -31,9 +31,14 @@ def isolated_home(tmp_path, monkeypatch):
     return home
 
 
-@pytest.fixture()
+@pytest.fixture(autouse=True)
 def clean_color_env(monkeypatch):
-    """Remove NO_COLOR/CLICOLOR so color tests are hermetic."""
+    """Remove NO_COLOR/CLICOLOR so color tests are hermetic (audit 0.2.0 #4).
+
+    autouse: without this, a host shell exporting NO_COLOR=1 makes every
+    ANSI assertion fail. Tests that exercise the env vars re-set them
+    explicitly via monkeypatch.setenv.
+    """
     for var in ("NO_COLOR", "CLICOLOR", "CLICOLOR_FORCE", "FORCE_COLOR"):
         monkeypatch.delenv(var, raising=False)
     return monkeypatch

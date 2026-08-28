@@ -268,7 +268,9 @@ def test_installed_skins_keys_on_internal_name(isolated_home):
     assert "kaoru" in keys
 
 
-def test_installed_skins_skips_broken_files(isolated_home):
+def test_installed_skins_handles_malformed_yaml_gracefully(isolated_home):
+    """Broken YAML must not crash the listing; it falls back to the file stem
+    (renamed from 'skips_broken_files' — nothing is skipped, audit 0.2.0 #8)."""
     skins_dir = isolated_home / ".hermes" / "skins"
     skins_dir.mkdir(parents=True)
     (skins_dir / "broken.yaml").write_text("::: garbage\n", encoding="utf-8")
@@ -282,13 +284,12 @@ def test_installed_skins_skips_broken_files(isolated_home):
 # ---------------------------------------------------------------------------
 
 def test_switch_reports_missing_heres_cli(runner, isolated_home, monkeypatch):
-    monkeypatch.setenv("PATH", "/nonexistent-bin")
-    # shutil.which honors PATH; ensure hermes is not found
-    import shutil
-    assert shutil.which("hermes") is None or True  # environment-dependent guard
+    """hermes CLI absent → warn, not crash (audit 0.2.0 #5: mock which directly)."""
+    monkeypatch.setattr("shutil.which", lambda name: None)
     result = runner.invoke(app, ["switch", "asuka"])
-    # command should not raise; either switches (if hermes exists) or warns
     assert result.exit_code == 0
+    assert "cannot switch automatically" in result.output
+    assert "hermes config set display.skin asuka" in result.output
 
 
 def test_export_installed_skin(runner, isolated_home, tmp_path):

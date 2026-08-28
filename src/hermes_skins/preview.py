@@ -78,12 +78,17 @@ def convert_rich_markup(text: str) -> str:
     return _RICH_TAG.sub(_sub, text)
 
 
-def _wrap_tool_row(items: list[str], width: int = 80) -> list[str]:
-    """Wrap tool icon entries so narrow terminals don't overflow (audit B12)."""
-    try:
-        width = max(40, shutil.get_terminal_size((width, 24)).columns - 4)
-    except Exception:
-        pass
+def _wrap_tool_row(items: list[str], width: int | None = 80) -> list[str]:
+    """Wrap tool icon entries so narrow terminals don't overflow (audit B12).
+
+    An explicit width argument always wins (audit 0.2.0 #3): terminal
+    auto-detection only applies to the default render path (width=None).
+    """
+    if width is None:
+        try:
+            width = max(40, shutil.get_terminal_size((80, 24)).columns - 4)
+        except Exception:
+            width = 80
     lines: list[str] = []
     current = ""
     for item in items:
