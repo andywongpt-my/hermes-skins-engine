@@ -57,6 +57,24 @@ hermes-skins validate
 
 # Export a skin to a file
 hermes-skins export asuka -o ./my-asuka.yaml
+
+# Preview with automatic terminal color-depth detection (truecolor → 256 → 16)
+# Override: HERMES_SKINS_COLOR_MODE=256|truecolor|16|off
+hermes-skins preview asuka
+
+# Health check: skins dir, active skin, template collisions, terminal color
+hermes-skins doctor            # add --json for machine-readable output
+hermes-skins doctor --json
+
+# Scriptable JSON output
+hermes-skins list-json
+hermes-skins validate --json ./my-theme.yaml
+hermes-skins wcag --json asuka
+
+# WCAG report: every status-bar color pair graded per role
+# hard pairs fail with exit 1 · advisory pairs warn · decorative is informational
+hermes-skins wcag asuka
+hermes-skins wcag
 ```
 
 ## Built-in Templates

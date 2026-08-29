@@ -38,7 +38,14 @@ def clean_color_env(monkeypatch):
     autouse: without this, a host shell exporting NO_COLOR=1 makes every
     ANSI assertion fail. Tests that exercise the env vars re-set them
     explicitly via monkeypatch.setenv.
+
+    v0.4.0 (F10): also pin TERM/COLORTERM and force the truecolor mode —
+    legacy assertions expect raw 38;2 sequences, and inheriting the host
+    terminal's depth (e.g. TERM=xterm-256color) would silently degrade them.
+    Tests that exercise depth detection re-set these explicitly.
     """
-    for var in ("NO_COLOR", "CLICOLOR", "CLICOLOR_FORCE", "FORCE_COLOR"):
+    for var in ("NO_COLOR", "CLICOLOR", "CLICOLOR_FORCE", "FORCE_COLOR",
+                "COLORTERM", "HERMES_SKINS_COLOR_MODE"):
         monkeypatch.delenv(var, raising=False)
+    monkeypatch.delenv("TERM", raising=False)  # unset TERM = historical truecolor default
     return monkeypatch

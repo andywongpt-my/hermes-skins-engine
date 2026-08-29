@@ -11,7 +11,8 @@ import shutil
 
 from .core import Skin
 
-# ANSI 24-bit truecolor helpers
+# ANSI helpers — 24-bit truecolor with automatic degradation to xterm-256,
+# ANSI-16, or none, based on TERM/COLORTERM detection (F10, v0.4.0).
 
 # NO_COLOR support (https://no-color.org): when the NO_COLOR env var is set
 # (to any value, per the spec), the preview renders as plain text. CLICOLOR=0
@@ -50,16 +51,166 @@ def _fg(hex_color: str, text: str) -> str:
     rgb = _rgb(hex_color)
     if rgb is None:
         return text
-    r, g, b = rgb
-    return f"\033[38;2;{r};{g};{b}m{text}\033[0m"
+    return _seq(ansi_fg_params(rgb), text)
 
 
 def _bold_fg(hex_color: str, text: str) -> str:
     rgb = _rgb(hex_color)
     if rgb is None:
         return text
-    r, g, b = rgb
-    return f"\033[1;38;2;{r};{g};{b}m{text}\033[0m"
+    return _seq(ansi_fg_params(rgb, bold=True), text)
+
+
+def _bg(hex_color: str, text: str) -> str:
+    """Paint text with a background color at the detected depth (F10)."""
+    rgb = _rgb(hex_color)
+    if rgb is None:
+        return text
+    return _seq(ansi_bg_params(rgb), text)
+
+
+# ---------------------------------------------------------------------------
+# Terminal color-depth detection + degradation (F10, v0.4.0)
+#
+# Truecolor previews on a plain `ssh user@box` with TERM=xterm render
+# garbage-ish 38;2 sequences. Detect the terminal's color depth and degrade:
+#   truecolor → 24-bit RGB (TERM=*truecolor*/24bit, COLORTERM=truecolor/24bit)
+#   256       → nearest xterm-256 palette index (TERM=*-256color)
+#   16        → nearest classic ANSI-16 color (any other TERM)
+#   none      → TERM=dumb (no escape sequences at all)
+# Unset TERM (CI, pipes) keeps truecolor — the historical behavior.
+# HERMES_SKINS_COLOR_MODE overrides everything (truecolor|256|16|none).
+# ---------------------------------------------------------------------------
+
+_COLOR_MODES = ("truecolor", "256", "16", "none")
+
+
+def terminal_color_mode() -> str:
+    """Return the effective color mode: truecolor | 256 | 16 | none."""
+    override = os.environ.get("HERMES_SKINS_COLOR_MODE", "").strip().lower()
+    if override in _COLOR_MODES:
+        return override
+    if not _color_enabled():
+        return "none"
+    colorterm = os.environ.get("COLORTERM", "").lower()
+    if colorterm in ("truecolor", "24bit"):
+        return "truecolor"
+    term = os.environ.get("TERM", "")
+    if not term:
+        return "truecolor"  # undetectable (CI/pipes): keep historical default
+    if "truecolor" in term or "24bit" in term:
+        return "truecolor"
+    # Known-truecolor terminals whose TERM doesn't advertise it
+    if "kitty" in term or "it2." in term or term.startswith("iterm"):
+        return "truecolor"
+    if term.endswith("-direct") or "-direct" in term:
+        return "truecolor"  # "direct" (Colon.semi directColor) = 24-bit capable
+    if "256color" in term:
+        return "256"
+    if term == "dumb":
+        return "none"
+    return "16"
+
+
+# Classic ANSI-16 palette (the values xterm-derived terminals actually show)
+_ANSI16_RGB: tuple[tuple[int, int, int], ...] = (
+    (0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0),
+    (0, 0, 128), (128, 0, 128), (0, 128, 128), (192, 192, 192),
+    (128, 128, 128), (255, 0, 0), (0, 255, 0), (255, 255, 0),
+    (0, 0, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255),
+)
+
+
+def _cube_level(i: int) -> int:
+    return 0 if i == 0 else 55 + 40 * i
+
+
+def _build_256_palette() -> tuple[tuple[int, int, int], ...]:
+    pal: list[tuple[int, int, int]] = list(_ANSI16_RGB)
+    for r in range(6):
+        for g in range(6):
+            for b in range(6):
+                pal.append((_cube_level(r), _cube_level(g), _cube_level(b)))
+    for i in range(24):
+        v = 8 + 10 * i
+        pal.append((v, v, v))
+    return tuple(pal)
+
+
+_PAL256 = _build_256_palette()
+
+
+def _nearest(rgb: tuple[int, int, int], palette: tuple[tuple[int, int, int], ...]) -> int:
+    best_i, best_d = 0, 1 << 30
+    for i, (r, g, b) in enumerate(palette):
+        d = (rgb[0] - r) ** 2 + (rgb[1] - g) ** 2 + (rgb[2] - b) ** 2
+        if d < best_d:
+            best_i, best_d = i, d
+            if d == 0:
+                break
+    return best_i
+
+
+def rgb_to_256(rgb: tuple[int, int, int]) -> int:
+    """Nearest xterm-256 palette index for an RGB tuple.
+
+    Exact RGB matches prefer the 6x6x6 cube region over the ANSI-16 base
+    (both contain pure blue/green/red), so #0000FF maps to the cube corner
+    (index 21) rather than ANSI blue (12) — consistent with xterm's own
+    lookup tables.
+    """
+    best_i, best_d = _nearest(rgb, _ANSI16_RGB), 1 << 30
+    start = 16
+    for i in range(start, len(_PAL256)):
+        r, g, b = _PAL256[i]
+        d = (rgb[0] - r) ** 2 + (rgb[1] - g) ** 2 + (rgb[2] - b) ** 2
+        if d < best_d:
+            best_i, best_d = i, d
+            if d == 0:
+                break
+    return best_i
+
+
+def rgb_to_16(rgb: tuple[int, int, int]) -> int:
+    """Nearest classic ANSI-16 palette index for an RGB tuple."""
+    return _nearest(rgb, _ANSI16_RGB)
+
+
+def ansi_fg_params(rgb: tuple[int, int, int], bold: bool = False) -> str:
+    """SGR parameter string for a foreground color at the detected depth.
+
+    truecolor → "1;38;2;R;G;B" / "38;2;R;G;B"
+    256       → "1;38;5;N" / "38;5;N"
+    16        → "1;9m"-style (30-37 / 90-97) / "30-37"
+    none      → "" (caller emits the text unstyled)
+    """
+    mode = terminal_color_mode()
+    if mode == "truecolor":
+        return ("1;38;2;%d;%d;%d" if bold else "38;2;%d;%d;%d") % rgb
+    if mode == "256":
+        return ("1;38;5;%d" if bold else "38;5;%d") % rgb_to_256(rgb)
+    if mode == "16":
+        idx = rgb_to_16(rgb)
+        base = (idx + 90 - 8) if idx >= 8 else idx + 30
+        return f"1;{base}" if bold else f"{base}"
+    return ""
+
+
+def ansi_bg_params(rgb: tuple[int, int, int]) -> str:
+    """SGR parameter string for a background color at the detected depth."""
+    mode = terminal_color_mode()
+    if mode == "truecolor":
+        return "48;2;%d;%d;%d" % rgb
+    if mode == "256":
+        return "48;5;%d" % rgb_to_256(rgb)
+    if mode == "16":
+        idx = rgb_to_16(rgb)
+        return str(idx + 100 - 8) if idx >= 8 else str(idx + 40)
+    return ""
+
+
+def _seq(params: str, text: str) -> str:
+    return f"\033[{params}m{text}\033[0m" if params else text
 
 
 # Rich markup → ANSI (audit B7). Template banner art uses Rich-style tags

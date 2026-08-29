@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import sys
 import re
+import json
 import shutil
 import time
 import urllib.error
@@ -26,6 +27,7 @@ from pathlib import Path
 
 import typer
 import yaml
+from typing import Optional
 
 from . import __version__
 from .core import Skin
@@ -37,7 +39,7 @@ from .generators import (
     contrast_ratio,
     THEMES,
 )
-from .preview import render_preview, _color_enabled, strip_ansi
+from .preview import render_preview, _color_enabled, strip_ansi, _bg, terminal_color_mode
 
 class Harmony(str, Enum):
     complementary = "complementary"
@@ -154,6 +156,7 @@ def validate(
     file: str = typer.Argument(None, help="Path to a skin YAML file. If omitted, validates all installed skins."),
     contrast: bool = typer.Option(True, "--contrast/--no-contrast", help="Also check WCAG AA contrast on status-bar pairs."),
     min_ratio: float = typer.Option(4.5, "--min-ratio", help="Minimum WCAG ratio for text pairs (dim pairs use 3.0)."),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable output (one JSON object)."),
 ):
     """Validate a skin file (or all installed skins): schema + WCAG contrast.
 
@@ -185,10 +188,15 @@ def validate(
                 targets.append((name, p, None, str(e)))
 
     had_error = False
+    json_targets: list[dict] = []
     for label, path, skin, load_err in targets:
         if load_err is not None:
-            typer.echo(f"✗ {label}: {load_err}", err=True)
             had_error = True
+            if json_out:
+                json_targets.append({"skin": label, "valid": False, "load_error": load_err,
+                                     "schema_errors": [], "warnings": [], "contrast_errors": []})
+            else:
+                typer.echo(f"✗ {label}: {load_err}", err=True)
             continue
         warnings = skin.validate()
         # Schema errors vs warnings (audit 0.2.0 #1): a missing name or an
@@ -198,6 +206,7 @@ def validate(
         schema_errors = [w for w in warnings if any(w.startswith(p) or p in w for p in error_prefixes)]
         schema_warnings = [w for w in warnings if w not in schema_errors]
         had_error = had_error or bool(schema_errors)
+        json_entry: dict = {"skin": label, "valid": True}
         # WCAG check on the pairs that actually render as text-on-background
         contrast_errors: list[str] = []
         if contrast:
@@ -221,6 +230,18 @@ def validate(
                         f"colors.{slot} on {bg}: {ratio:.2f}:1 < {need}:1"
                     )
             had_error = had_error or bool(contrast_errors)
+        json_entry["schema_errors"] = schema_errors
+        json_entry["warnings"] = schema_warnings
+        if contrast:
+            try:
+                json_entry["contrast"] = _status_bar_pairs(skin.colors, min_ratio)
+            except Exception:
+                pass
+        json_entry["contrast_errors"] = contrast_errors
+        json_entry["valid"] = not (schema_errors or contrast_errors)
+        json_targets.append(json_entry)
+        if json_out:
+            continue
         if not schema_errors and not schema_warnings and not contrast_errors:
             ok_msg = f"✓ {label}: valid (29 colors"
             ok_msg += f", status bar ≥ {min_ratio}:1)" if contrast else ")"
@@ -238,6 +259,12 @@ def validate(
             typer.echo(f"✗ {label}: {len(contrast_errors)} contrast error(s):", err=True)
             for e in contrast_errors:
                 typer.echo(f"  · {e}", err=True)
+
+    if json_out:
+        typer.echo(json.dumps({
+            "ok": not had_error,
+            "skins": json_targets,
+        }, indent=2))
 
     if had_error:
         raise typer.Exit(1)
@@ -638,7 +665,9 @@ def diff(
         rgb = _channels(hx)
         if rgb is None:
             return "????????"
-        return f"\033[48;2;{rgb[0]};{rgb[1]};{rgb[2]}m  \033[0m"
+        # F10: go through the preview module so the swatch degrades to
+        # 256/16-color terminals instead of emitting raw 48;2 sequences.
+        return _bg(hx, "  ")
 
     typer.echo(f"diff {a} → {b}:")
     typer.echo(f"  {'slot':22s} {'A':10s} {'B':10s}  change")
@@ -878,6 +907,284 @@ def watch(
 def version():
     """Show version."""
     typer.echo(f"hermes-skins v{__version__}")
+
+
+# ---------------------------------------------------------------------------
+# P3 (v0.4.0) — doctor, wcag report, list-json
+# ---------------------------------------------------------------------------
+
+def _status_bar_pairs(colors, min_ratio: float) -> list[dict]:
+    """WCAG pairs checked by `validate --contrast`, as JSON-ready dicts."""
+    pairs = [
+        ("status_bar_text", colors.status_bar_bg, min_ratio),
+        ("status_bar_strong", colors.status_bar_bg, min_ratio),
+        ("status_bar_dim", colors.status_bar_bg, 3.0),
+        ("status_bar_good", colors.status_bar_bg, min_ratio),
+        ("status_bar_warn", colors.status_bar_bg, min_ratio),
+        ("status_bar_bad", colors.status_bar_bg, min_ratio),
+        ("status_bar_critical", colors.status_bar_bg, min_ratio),
+    ]
+    out: list[dict] = []
+    for slot, bg, need in pairs:
+        fg = getattr(colors, slot)
+        try:
+            ratio = contrast_ratio(fg, bg)
+        except (ValueError, AttributeError):
+            continue  # invalid hex already reported as a schema error
+        out.append({
+            "slot": slot, "fg": fg, "bg": bg,
+            "ratio": round(ratio, 2), "required": need,
+            "pass": ratio >= need,
+        })
+    return out
+
+
+@app.command()
+def doctor(
+    name: str = typer.Argument(None, help="Skin to inspect (default: the active skin from config.yaml)."),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable output."),
+):
+    """Diagnose the skin environment end to end (P3).
+
+    Checks: installed skins, Hermes config display.skin readability, whether
+    the active skin loads and validates, template/installed name collisions,
+    and this terminal's detected color depth. Exit 1 on any ✗ failure.
+    """
+    checks: list[dict] = []
+
+    def check(label: str, ok: bool, detail: str, warn: bool = False) -> None:
+        checks.append({
+            "check": label,
+            "status": ("ok" if ok else "warn" if warn else "fail"),
+            "detail": detail,
+        })
+
+    skins = installed_skins()
+    check("skins-dir", bool(skins),
+          f"{len(skins)} skin(s) in ~/.hermes/skins/" if skins else "~/.hermes/skins/ is empty")
+
+    cfg = Path.home() / ".hermes" / "config.yaml"
+    display_skin = None
+    if cfg.exists():
+        try:
+            display_skin = (yaml.safe_load(cfg.read_text(encoding="utf-8")) or {}).get("display", {}).get("skin")
+        except Exception as e:
+            check("config-readable", False, f"config.yaml unreadable: {e}")
+        else:
+            check("config-readable", True, str(cfg))
+    else:
+        check("config-readable", True, f"{cfg} not present (Hermes defaults)", warn=True)
+
+    active = display_skin or name
+    skin: Skin | None = None
+    if active and active in skins:
+        try:
+            skin = Skin.load(skins[active])
+            warnings = skin.validate()
+            check("active-skin-loads", not warnings,
+                  f"'{active}' loaded from {skins[active].name}"
+                  + (f" — {len(warnings)} warning(s)" if warnings else ""),
+                  warn=True)
+        except Exception as e:
+            check("active-skin-loads", False, f"'{active}' failed to load: {e}")
+    elif active:
+        check("active-skin-loads", False,
+              f"skin '{active}' is not installed in ~/.hermes/skins/"
+              + ("" if display_skin else " (no display.skin in config; pass NAME explicitly)"))
+    else:
+        check("active-skin-loads", False, "No display.skin in config.yaml and no NAME given", warn=True)
+
+    collisions = sorted(set(THEMES) & set(skins))
+    # NOTE: installed skins sharing a template name (all 8 EVA skins do after
+    # `generate`) legitimately shadow the template — diff/preview resolve
+    # installed-first. A collision is normal, so it's reported as info in the
+    # JSON payload rather than as a failing check.
+    mode = terminal_color_mode()
+    check("terminal-color", mode != "none",
+          f"detected: {mode}" + ("" if mode == "truecolor"
+                                 else " (previews degrade to this depth; HERMES_SKINS_COLOR_MODE overrides)"))
+
+    ok_all = all(c["status"] != "fail" for c in checks)
+    if json_out:
+        typer.echo(json.dumps({
+            "ok": ok_all,
+            "active": active,
+            "color_mode": mode,
+            "template_name_collisions": collisions,
+            "checks": checks,
+            "skin": skin.to_dict() if skin else None,
+        }, indent=2))
+    else:
+        icon = {"ok": "✓", "warn": "⚠", "fail": "✗"}
+        typer.echo(f"hermes-skins doctor — active: {active or '(none)'}")
+        for c in checks:
+            typer.echo(f"  {icon[c['status']]} {c['check']}: {c['detail']}")
+        if skin:
+            typer.echo(f"\n  primary: {skin.primary()}  description: {skin.description or '(none)'}")
+        typer.echo(f"\n  overall: {'✓ healthy' if ok_all else '✗ problems found (see ✗ lines)'}")
+    if not ok_all:
+        raise typer.Exit(1)
+
+
+def _wcag_pairs(skin: Skin, min_ratio: float):
+    """Compute WCAG pairs for one skin. Returns (report, failed, advisory)."""
+    from .generators import ensure_contrast
+
+    colors = skin.colors
+    bg = colors.status_bar_bg
+    # Slot roles for the status-bar-bg sweep:
+    #   HARD       — status_bar_* text slots: these genuinely render on
+    #                status_bar_bg, so a fail here fails the report (exit 1).
+    #   DECORATIVE — surface/fill slots (borders, bg fills): not legibility
+    #                pairs; informational only.
+    #   ADVISORY   — every other text slot: they render on the *default*
+    #                terminal background, not the status bar, so the ratio vs
+    #                status_bar_bg is a worst-case proxy — reported (with a
+    #                suggestion) but does not fail the exit code.
+    DECORATIVE = {
+        "status_bar_bg", "voice_status_bg", "completion_menu_bg",
+        "completion_menu_current_bg", "completion_menu_meta_bg",
+        "completion_menu_meta_current_bg", "selection_bg", "input_rule",
+        "session_border", "banner_border",
+    }
+    report: list = []
+    for slot, fg in colors.to_dict().items():
+        need = 3.0 if slot == "status_bar_dim" else min_ratio
+        decorative = slot in DECORATIVE
+        hard = slot.startswith("status_bar_") and not decorative
+        try:
+            ratio = contrast_ratio(fg, bg)
+        except (ValueError, AttributeError):
+            report.append({"slot": slot, "fg": fg, "bg": bg, "error": "invalid hex",
+                           "decorative": decorative, "hard": hard})
+            continue
+        suggestion = None
+        if ratio < need and not decorative:
+            fixed = ensure_contrast(fg, bg, need)
+            suggestion = fixed if fixed != fg else None
+        report.append({
+            "slot": slot, "fg": fg, "bg": bg,
+            "ratio": round(ratio, 2), "required": need,
+            "decorative": decorative, "hard": hard,
+            "pass": ratio >= need or decorative, "suggest": suggestion,
+        })
+    failed = [r for r in report if not r.get("pass", False) and r.get("hard")]
+    advisory = [r for r in report if not r.get("pass", False) and not r.get("hard") and not r.get("decorative")]
+    return report, failed, advisory
+
+
+@app.command()
+def wcag(
+    name: Optional[str] = typer.Argument(None, help="Skin name (installed or template). Omit to sweep every installed skin."),
+    min_ratio: float = typer.Option(4.5, "--min-ratio", help="AA threshold for normal text (status_bar_dim uses 3.0)."),
+    json_out: bool = typer.Option(False, "--json", help="Machine-readable output."),
+):
+    """Full WCAG contrast report: all 29 slots vs status_bar_bg (P3).
+
+    Every foreground slot is measured against the status-bar background as
+    the worst-case surface. Failing pairs include an ensure_contrast()
+    suggestion. Exit 1 when any pair fails. With no NAME, sweeps every
+    installed skin (like `validate`).
+    """
+    skins = installed_skins()
+    if name is None:
+        if not skins:
+            typer.echo("No installed skins to sweep.", err=True)
+            raise typer.Exit(1)
+        any_failed = False
+        per_skin: dict = {}
+        for sname in sorted(skins):
+            skin = Skin.load(skins[sname])
+            report, failed, advisory = _wcag_pairs(skin, min_ratio)
+            any_failed = any_failed or bool(failed)
+            per_skin[sname] = {
+                "bg": skin.colors.status_bar_bg, "min_ratio": min_ratio,
+                "pass": not failed,
+                "hard_failures": [r["slot"] for r in failed],
+                "advisory": [r["slot"] for r in advisory],
+                "pairs": report,
+            }
+            if not json_out:
+                mark = "✓" if not failed else "✗"
+                nf = len(failed)
+                typer.echo(f"  {mark} {sname:12s} {len(report)} pairs, {nf} hard fail"
+                           f" ({len(advisory)} advisory)")
+        if json_out:
+            typer.echo(json.dumps({"ok": not any_failed, "skins": per_skin}, indent=2))
+        if any_failed:
+            raise typer.Exit(1)
+        return
+
+    if name in skins:
+        skin = Skin.load(skins[name])
+    elif name in THEMES:
+        skin = generate_from_template(name)
+    else:
+        typer.echo(f"Skin '{name}' not found (installed: {len(skins)}, templates: {len(THEMES)}).", err=True)
+        raise typer.Exit(1)
+
+    colors = skin.colors
+    bg = colors.status_bar_bg
+    report, failed, advisory = _wcag_pairs(skin, min_ratio)
+    if json_out:
+        typer.echo(json.dumps({
+            "skin": name, "bg": bg, "min_ratio": min_ratio,
+            "pass": not failed,
+            "hard_failures": [r["slot"] for r in failed],
+            "advisory": [r["slot"] for r in advisory],
+            "pairs": report,
+        }, indent=2))
+    else:
+        typer.echo(f"WCAG report — {name} (bg={bg}, AA={min_ratio}:1):")
+        for r in report:
+            if "error" in r:
+                typer.echo(f"  ✗ {r['slot']:22s} {r['fg']!r} — invalid hex")
+                continue
+            if r["pass"]:
+                mark = "✓"
+            elif r.get("hard"):
+                mark = "✗"
+            else:
+                mark = "⚠"
+            note = "  (decorative, informational)" if r["decorative"] and r["ratio"] < r["required"] else ""
+            line = f"  {mark} {r['slot']:22s} {r['fg']}  {r['ratio']:5.2f}:1 (need {r['required']}:1){note}"
+            if r["suggest"]:
+                line += f"  → try {r['suggest']}"
+            typer.echo(line)
+        hard_n = sum(1 for r in report if r.get("hard"))
+        hard_pass = sum(1 for r in report if r.get("hard") and r["pass"])
+        typer.echo(f"\n  {hard_pass}/{hard_n} status-bar pairs pass (hard);"
+                   f" {len(advisory)} advisory, {sum(1 for r in report if r.get('decorative'))} decorative; "
+                   f"{len(failed)} fail")
+    if failed:
+        raise typer.Exit(1)
+
+
+@app.command("list-json")
+def list_json():
+    """List all installed skins as JSON (P3)."""
+    skins = installed_skins()
+    active = active_skin_name()
+    items: list[dict] = []
+    for name, path in sorted(skins.items()):
+        entry: dict = {"name": name, "path": str(path), "active": name == active}
+        try:
+            skin = Skin.load(path)
+            entry.update({
+                "description": skin.description or "",
+                "schema_version": skin.schema_version,
+                "primary": skin.primary(),
+                "valid": not skin.validate(),
+                "warnings": skin.validate(),
+            })
+        except Exception as e:
+            entry.update({"description": None, "valid": False, "error": str(e)})
+        items.append(entry)
+    typer.echo(json.dumps({
+        "skins": items,
+        "active": active,
+        "count": len(items),
+    }, indent=2))
 
 
 if __name__ == "__main__":
