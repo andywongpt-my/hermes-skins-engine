@@ -169,12 +169,22 @@ def validate(
     if file:
         p = Path(file)
         if not p.exists():
-            typer.echo(f"File not found: {p}", err=True)
+            if json_out:  # AGY audit F-09: keep --json output machine-readable
+                typer.echo(json.dumps({"ok": False, "skins": [
+                    {"skin": p.name, "valid": False, "load_error": f"file not found: {p}",
+                     "schema_errors": [], "warnings": [], "contrast_errors": []}]}, indent=2))
+            else:
+                typer.echo(f"File not found: {p}", err=True)
             raise typer.Exit(1)
         try:
             targets.append((p.name, p, Skin.load(p), None))
         except Exception as e:
-            typer.echo(f"✗ {p.name}: invalid skin file: {e}", err=True)
+            if json_out:  # AGY audit F-09: same for unreadable YAML
+                typer.echo(json.dumps({"ok": False, "skins": [
+                    {"skin": p.name, "valid": False, "load_error": str(e),
+                     "schema_errors": [], "warnings": [], "contrast_errors": []}]}, indent=2))
+            else:
+                typer.echo(f"✗ {p.name}: invalid skin file: {e}", err=True)
             raise typer.Exit(1)
     else:
         skins = installed_skins()
@@ -975,7 +985,7 @@ def doctor(
     else:
         check("config-readable", True, f"{cfg} not present (Hermes defaults)", warn=True)
 
-    active = display_skin or name
+    active = name or display_skin
     skin: Skin | None = None
     if active and active in skins:
         try:
@@ -1045,7 +1055,7 @@ def _wcag_pairs(skin: Skin, min_ratio: float):
         "status_bar_bg", "voice_status_bg", "completion_menu_bg",
         "completion_menu_current_bg", "completion_menu_meta_bg",
         "completion_menu_meta_current_bg", "selection_bg", "input_rule",
-        "session_border", "banner_border",
+        "session_border", "banner_border", "response_border",
     }
     report: list = []
     for slot, fg in colors.to_dict().items():
@@ -1055,8 +1065,11 @@ def _wcag_pairs(skin: Skin, min_ratio: float):
         try:
             ratio = contrast_ratio(fg, bg)
         except (ValueError, AttributeError):
+            # AGY audit F-01: mark the pair explicitly as failed (and hard if
+            # applicable) so downstream r["pass"] consumers never KeyError.
             report.append({"slot": slot, "fg": fg, "bg": bg, "error": "invalid hex",
-                           "decorative": decorative, "hard": hard})
+                           "required": need, "decorative": decorative, "hard": hard,
+                           "pass": False, "suggest": None})
             continue
         suggestion = None
         if ratio < need and not decorative:
@@ -1094,7 +1107,15 @@ def wcag(
         any_failed = False
         per_skin: dict = {}
         for sname in sorted(skins):
-            skin = Skin.load(skins[sname])
+            try:
+                skin = Skin.load(skins[sname])
+            except Exception as e:  # AGY audit F-05: one corrupt skin must not
+                # crash the whole sweep — report it as a hard failure instead.
+                per_skin[sname] = {"error": str(e), "pass": False}
+                any_failed = True
+                if not json_out:
+                    typer.echo(f"  ✗ {sname:12s} unreadable: {e}")
+                continue
             report, failed, advisory = _wcag_pairs(skin, min_ratio)
             any_failed = any_failed or bool(failed)
             per_skin[sname] = {
@@ -1115,7 +1136,10 @@ def wcag(
             raise typer.Exit(1)
         return
 
-    if name in skins:
+    if name and (name.endswith(".yaml") or name.endswith(".yml")) and Path(name).exists():
+        # AGY audit F-06: accept a skin YAML file path, like `validate` does.
+        skin = Skin.load(Path(name))
+    elif name in skins:
         skin = Skin.load(skins[name])
     elif name in THEMES:
         skin = generate_from_template(name)

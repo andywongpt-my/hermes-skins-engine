@@ -59,7 +59,7 @@ hermes-skins validate
 hermes-skins export asuka -o ./my-asuka.yaml
 
 # Preview with automatic terminal color-depth detection (truecolor → 256 → 16)
-# Override: HERMES_SKINS_COLOR_MODE=256|truecolor|16|off
+# Override: HERMES_SKINS_COLOR_MODE=truecolor|256|16|none
 hermes-skins preview asuka
 
 # Health check: skins dir, active skin, template collisions, terminal color

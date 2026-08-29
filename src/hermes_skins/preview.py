@@ -140,7 +140,8 @@ def _build_256_palette() -> tuple[tuple[int, int, int], ...]:
 _PAL256 = _build_256_palette()
 
 
-def _nearest(rgb: tuple[int, int, int], palette: tuple[tuple[int, int, int], ...]) -> int:
+def _nearest(rgb: tuple[int, int, int], palette: tuple[tuple[int, int, int], ...]) -> tuple[int, int]:
+    """Return (index, squared distance) of the closest palette entry to rgb."""
     best_i, best_d = 0, 1 << 30
     for i, (r, g, b) in enumerate(palette):
         d = (rgb[0] - r) ** 2 + (rgb[1] - g) ** 2 + (rgb[2] - b) ** 2
@@ -148,7 +149,7 @@ def _nearest(rgb: tuple[int, int, int], palette: tuple[tuple[int, int, int], ...
             best_i, best_d = i, d
             if d == 0:
                 break
-    return best_i
+    return best_i, best_d
 
 
 def rgb_to_256(rgb: tuple[int, int, int]) -> int:
@@ -157,14 +158,15 @@ def rgb_to_256(rgb: tuple[int, int, int]) -> int:
     Exact RGB matches prefer the 6x6x6 cube region over the ANSI-16 base
     (both contain pure blue/green/red), so #0000FF maps to the cube corner
     (index 21) rather than ANSI blue (12) — consistent with xterm's own
-    lookup tables.
+    lookup tables. A strictly closer ANSI-16 base color still wins, e.g.
+    #800000 (exact ANSI dark red, index 1) beats its nearest cube entry
+    (95 = #870000).
     """
-    best_i, best_d = _nearest(rgb, _ANSI16_RGB), 1 << 30
-    start = 16
-    for i in range(start, len(_PAL256)):
+    best_i, best_d = _nearest(rgb, _ANSI16_RGB)
+    for i in range(16, len(_PAL256)):
         r, g, b = _PAL256[i]
         d = (rgb[0] - r) ** 2 + (rgb[1] - g) ** 2 + (rgb[2] - b) ** 2
-        if d < best_d:
+        if d <= best_d:
             best_i, best_d = i, d
             if d == 0:
                 break
@@ -173,7 +175,7 @@ def rgb_to_256(rgb: tuple[int, int, int]) -> int:
 
 def rgb_to_16(rgb: tuple[int, int, int]) -> int:
     """Nearest classic ANSI-16 palette index for an RGB tuple."""
-    return _nearest(rgb, _ANSI16_RGB)
+    return _nearest(rgb, _ANSI16_RGB)[0]
 
 
 def ansi_fg_params(rgb: tuple[int, int, int], bold: bool = False) -> str:

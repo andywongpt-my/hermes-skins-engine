@@ -253,6 +253,16 @@ class TestDoctor:
         assert result.exit_code == 0
         assert "active: rei" in result.output
 
+    def test_doctor_explicit_name_overrides_config(self, runner, isolated_home):
+        # AGY audit F-02: explicit NAME must win over config.yaml display.skin.
+        self._install(isolated_home)
+        self._install(isolated_home, "rei")
+        cfg = isolated_home / ".hermes" / "config.yaml"
+        cfg.write_text("display:\n  skin: asuka\n", encoding="utf-8")
+        result = runner.invoke(app, ["doctor", "rei"])
+        assert result.exit_code == 0
+        assert "active: rei" in result.output
+
 
 # ---------------------------------------------------------------------------
 # wcag report
@@ -304,6 +314,60 @@ class TestWcag:
         assert dim["required"] == 3.0
         others = [p for p in d["pairs"] if p["slot"] != "status_bar_dim"]
         assert all(p["required"] == 4.5 for p in others)
+
+    def test_wcag_invalid_hex_does_not_crash(self, runner, isolated_home):
+        # AGY audit F-01: an invalid hex in a hard slot must not KeyError.
+        p = isolated_home / ".hermes" / "skins"
+        p.mkdir(parents=True)
+        (p / "broken.yaml").write_text(textwrap.dedent("""\
+            name: broken
+            colors:
+              status_bar_bg: "#222222"
+              status_bar_text: "#ZZZZZZ"
+        """), encoding="utf-8")
+        result = runner.invoke(app, ["wcag", "broken"])
+        assert result.exit_code == 1
+        assert "invalid hex" in result.output
+
+    def test_wcag_invalid_hex_json(self, runner, isolated_home):
+        p = isolated_home / ".hermes" / "skins"
+        p.mkdir(parents=True)
+        (p / "broken.yaml").write_text(textwrap.dedent("""\
+            name: broken
+            colors:
+              status_bar_bg: "#222222"
+              status_bar_text: "#ZZZZZZ"
+        """), encoding="utf-8")
+        result = runner.invoke(app, ["wcag", "broken", "--json"])
+        assert result.exit_code == 1
+        d = jsonlib.loads(result.output)
+        assert d["pass"] is False
+        assert "status_bar_text" in d["hard_failures"]
+
+    def test_wcag_sweep_survives_corrupt_skin(self, runner, isolated_home):
+        # AGY audit F-05: one unreadable skin must not crash the sweep.
+        out = isolated_home / ".hermes" / "skins"
+        out.mkdir(parents=True)
+        generate_from_template("rei").dump(out / "rei.yaml")
+        (out / "corrupt.yaml").write_text("{ this is not: yaml: [", encoding="utf-8")
+        result = runner.invoke(app, ["wcag"])
+        assert result.exit_code == 1  # corrupt skin counts as a failure
+        assert "unreadable" in result.output
+        assert "rei" in result.output  # the healthy skin is still reported
+        d = jsonlib.loads(runner.invoke(app, ["wcag", "--json"]).output)
+        assert d["ok"] is False
+        assert d["skins"]["corrupt"]["pass"] is False
+        assert d["skins"]["rei"]["pass"] is True
+
+    def test_wcag_accepts_file_path(self, runner, isolated_home, tmp_path):
+        # AGY audit F-06: wcag accepts a YAML path like validate does.
+        src = tmp_path / "s.yaml"
+        generate_from_template("shinji").dump(src)
+        result = runner.invoke(app, ["wcag", str(src), "--json"])
+        assert result.exit_code == 0
+        d = jsonlib.loads(result.output)
+        assert d["pass"] is True
+        assert len(d["pairs"]) == 29
 
 
 # ---------------------------------------------------------------------------
