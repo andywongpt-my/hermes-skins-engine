@@ -114,7 +114,41 @@ def ensure_contrast(fg_hex: str, bg_hex: str, min_ratio: float = 4.5) -> str:
 # generated banner_dim hit 1.3-1.6:1 and banner_border 1.0-1.1:1 on black —
 # category labels, MCP lines, and panel borders were invisible (Andy's
 # second screenshot). 3.0:1 (WCAG AA for large/UI text) is the floor.
+#
+# Quantization guard: terminals without COLORTERM=truecolor downconvert to
+# xterm-256, which crushes near-black lifted colors back into the dark cube
+# rows (measured: #B6002A at 3.0:1 quantized to #AF0000 lum 52/255). The
+# xterm-256 palette has a hard luminance gap around the 48-63 band, so we
+# also require the QUANTIZED color to clear 65/255 perceived luminance —
+# the smallest cube level that keeps every hue readable after downconvert.
 BLACK_BG_MIN_CONTRAST = 3.0
+QUANTIZED_MIN_LUMINANCE = 65.0
+
+
+def _xterm256_quantize(hex_color: str):
+    """Closest xterm-256 color to a #RRGGBB hex (the cube rows 16-231)."""
+    rgb = tuple(int(hex_color.lstrip("#")[i:i + 2], 16) for i in (0, 2, 4))
+    def lv(v):
+        return 0 if v == 0 else 55 + v * 40
+    best_n, best_d = 16, None
+    for n in range(16, 232):
+        n -= 16
+        r, rem = divmod(n, 36)
+        g, b = divmod(rem, 6)
+        cand = (lv(r), lv(g), lv(b))
+        d = sum((a - c) ** 2 for a, c in zip(cand, rgb))
+        if best_d is None or d < best_d:
+            best_n, best_d = n + 16, d
+    return best_n
+
+
+def _xterm256_rgb(n: int):
+    """RGB of an xterm-256 cube row."""
+    n -= 16
+    r, rem = divmod(n, 36)
+    g, b = divmod(rem, 6)
+    lv = lambda v: 0 if v == 0 else 55 + v * 40
+    return (lv(r), lv(g), lv(b))
 
 
 def _contrast_vs_black(hex_color: str) -> float:
@@ -128,16 +162,24 @@ def _ensure_visible_on_black(hex_color: str, min_ratio: float = BLACK_BG_MIN_CON
     The classic-harmony derivation darkens `l - 0.35`/`l - 0.20` with no
     floor check against the terminal background, so deep bases (asuka
     #CC0033 → banner_border #1A0006 at 1.0:1) produce slots that vanish.
+    Also requires the xterm-256-quantized color to clear
+    QUANTIZED_MIN_LUMINANCE so the lift survives 256-color downconversion.
     """
-    if _contrast_vs_black(hex_color) >= min_ratio:
+    def _ok(hx: str) -> bool:
+        if _contrast_vs_black(hx) < min_ratio:
+            return False
+        q = _xterm256_rgb(_xterm256_quantize(hx))
+        return (0.299 * q[0] + 0.587 * q[1] + 0.114 * q[2]) >= QUANTIZED_MIN_LUMINANCE
+
+    if _ok(hex_color):
         return hex_color
     h, s, l = hex_to_hsl(hex_color)
     lo, hi = l, 1.0
-    # Binary-search the smallest lightness that clears the ratio.
+    # Binary-search the smallest lightness that clears both floors.
     for _ in range(24):
         mid = (lo + hi) / 2
         cand = hsl_to_hex(h, s, mid)
-        if _contrast_vs_black(cand) >= min_ratio:
+        if _ok(cand):
             hi = mid
         else:
             lo = mid
