@@ -30,8 +30,8 @@ def entries():
 
 def test_collect_entries_covers_installed_templates_random(entries):
     kinds = {e.kind for e in entries}
-    assert kinds == {"installed", "template", "random"}
-    assert len(entries) >= 14
+    assert {"template", "random"} <= kinds
+    assert len(entries) >= 14  # 14 templates + random slot (+ installed locally)
 
 
 def test_entry_lazy_load_captures_errors(tmp_path):
@@ -56,7 +56,12 @@ def test_frame_highlights_selection_and_active(entries):
     frame = render_browser(entries, 0, "asuka", 120, 34, "", "dark", "")
     plain = ANSI.sub("", frame)
     assert "▸" in plain
-    assert "●" in plain  # active marker somewhere in the list
+    # the ● active marker renders only when an installed skin matches `active`;
+    # CI runners have an empty skins dir, so only assert when one is present
+    installed = [e for e in entries if e.kind == "installed"]
+    if installed:
+        frame2 = render_browser(entries, 0, installed[0].name, 120, 34, "", "dark", "")
+        assert "●" in ANSI.sub("", frame2)
 
 
 def test_frame_filter_narrows_list(entries):
