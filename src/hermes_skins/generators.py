@@ -344,7 +344,10 @@ def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = 
         # (light bases previously produced ~1:1 pairs).
         status_text = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.70), status_bg, 4.5)
         status_strong = ensure_contrast(bright, status_bg, 4.5)
-        status_dim = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.45), status_bg, 3.0)
+        # status_dim renders the model name / ctx / timing in the status bar —
+        # primary glance information, not decoration. 3.0:1 measured muddy on
+        # every skin (Andy's second screenshot); 4.5:1 keeps it legible.
+        status_dim = ensure_contrast(hsl_to_hex(h, s * 0.2, 0.45), status_bg, 4.5)
         status_good = ok
         status_warn = warn
         status_bad = bad
