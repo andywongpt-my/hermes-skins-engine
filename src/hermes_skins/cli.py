@@ -40,6 +40,7 @@ from .generators import (
     THEMES,
 )
 from .preview import render_preview, _color_enabled, strip_ansi, _bg, terminal_color_mode
+from .browser import BrowserEntry, collect_entries, render_browser, read_key, read_line_prefix
 
 class Harmony(str, Enum):
     complementary = "complementary"
@@ -872,6 +873,114 @@ def picker():
         elif key == "quit":
             sys.stdout.write("\n  (picker closed)\n")
             return
+
+
+# ---------------------------------------------------------------------------
+# Browse (P4, v0.5.0) — full-screen three-pane skin browser
+# ---------------------------------------------------------------------------
+
+@app.command()
+def browse():
+    """Full-screen skin browser: three panes, live preview, keyboard-driven.
+
+    ↑/↓ (or j/k) move · Enter install+switch · r roll a random skin ·
+    d toggle dark/light · / filter · q quit. Requires a TTY; POSIX only.
+    """
+    if not sys.stdin.isatty() or sys.platform == "win32":
+        typer.echo("browse needs an interactive terminal (TTY). Use 'hermes-skins picker' or 'preview --all' instead.", err=True)
+        raise typer.Exit(1)
+
+    import shutil as _shutil
+
+    mode = "dark"
+    filter_text = ""
+    status = ""
+    sel = 0
+    random_slot: dict[str, object] = {}
+
+    def _entries():
+        installed = installed_skins()
+        entry_list = collect_entries(None, installed, THEMES)
+        # inject rolled random skin if present
+        if "skin" in random_slot:
+            entry_list[-1] = BrowserEntry(
+                "random", random_slot.get("label", "(roll a random skin)"),
+                lambda: random_slot["skin"])
+        if active_skin_name():
+            pass
+        return entry_list
+
+    def _active_match(entries, active):
+        for i, e in enumerate(entries):
+            if e.kind == "installed" and e.name == active:
+                return i
+        return 0
+
+    entries = _entries()
+    sel = _active_match(entries, active_skin_name())
+
+    while True:
+        cols, rows = _shutil.get_terminal_size((100, 30))
+        frame = render_browser(entries, sel, active_skin_name(), cols, rows,
+                               filter_text, mode, status)
+        sys.stdout.write("\033[2J\033[H" + frame + "\n")
+        sys.stdout.flush()
+        status = ""
+        key = read_key()
+        if key == "quit":
+            sys.stdout.write("\n  (browser closed)\n")
+            return
+        if key == "up":
+            sel = (sel - 1) % len(entries)
+        elif key == "down":
+            sel = (sel + 1) % len(entries)
+        elif key == "enter":
+            entry = entries[sel]
+            if entry.skin is None:
+                status = f"✗ cannot load: {entry.error}"
+                continue
+            name = entry.skin.name
+            if entry.kind in ("template", "random"):
+                hermes_skins_dir().mkdir(parents=True, exist_ok=True)
+                dst = hermes_skins_dir() / f"{name}.yaml"
+                if not dst.exists():
+                    entry.skin.dump(dst)
+                    status = f"installed '{name}' and "
+                else:
+                    status = f"'{name}' already installed; "
+            else:
+                status = ""
+            _do_switch(name)
+            status += f"✓ switched to '{name}'"
+            # refresh active
+            entries = _entries()
+            sel = _active_match(entries, active_skin_name())
+        elif key == "rand":
+            from .generators import generate_random
+            skin = generate_random(mode=mode)
+            random_slot["skin"] = skin
+            random_slot["label"] = f"🎲 {skin.name}"
+            entries = _entries()
+            sel = len(entries) - 1
+            status = f"rolled {skin.name} — Enter to install"
+        elif key == "mode":
+            mode = "light" if mode == "dark" else "dark"
+            random_slot.pop("skin", None)
+            entries = _entries()
+            status = f"mode → {mode} (templates regenerate; roll r for a new random)"
+        elif key == "filter":
+            sys.stdout.write("\033[2J\033[H\nfilter: ")
+            sys.stdout.flush()
+            filter_text = read_line_prefix(filter_text)
+            # move selection into the filtered set
+            shown = [i for i, e in enumerate(entries)
+                     if not filter_text or filter_text.lower() in e.name.lower()]
+            if shown and sel not in shown:
+                sel = shown[0]
+        elif key.startswith("char:"):
+            filter_text += key[5:]
+        elif key == "backspace":
+            filter_text = filter_text[:-1]
 
 
 # ---------------------------------------------------------------------------
