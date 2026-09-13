@@ -41,6 +41,7 @@ from .generators import (
 )
 from .preview import render_preview, _color_enabled, strip_ansi, _bg, terminal_color_mode
 from .browser import BrowserEntry, collect_entries, render_browser, read_key, read_line_prefix
+from .gallery import render_gallery_file
 
 class Harmony(str, Enum):
     complementary = "complementary"
@@ -873,6 +874,29 @@ def picker():
         elif key == "quit":
             sys.stdout.write("\n  (picker closed)\n")
             return
+
+
+@app.command()
+def gallery(
+    out: Path = typer.Option(Path("hermes-skins-gallery.html"), "--out", "-o",
+                             help="Output HTML file"),
+    templates_only: bool = typer.Option(False, "--templates-only",
+                                        help="Skip installed skins"),
+    installed_only: bool = typer.Option(False, "--installed-only",
+                                        help="Skip built-in templates"),
+):
+    """Generate a standalone HTML gallery of all skins (P4).
+
+    One card per skin: mock terminal preview, full palette swatches with
+    per-slot WCAG grade, spinner faces. Open the file in any browser.
+    """
+    from .gallery import render_gallery_file
+
+    dest = Path(out).expanduser()
+    render_gallery_file(dest,
+                        include_installed=not installed_only,
+                        include_templates=not templates_only)
+    typer.echo(f"Gallery written: {dest.resolve()} ({dest.stat().st_size:,} bytes)")
 
 
 # ---------------------------------------------------------------------------
