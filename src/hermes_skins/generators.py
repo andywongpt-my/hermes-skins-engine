@@ -109,6 +109,41 @@ def ensure_contrast(fg_hex: str, bg_hex: str, min_ratio: float = 4.5) -> str:
 # Palette Engine — generates a full 15-color palette from a seed color
 # ---------------------------------------------------------------------------
 
+# Minimum WCAG contrast ratio against a black terminal background for the
+# palette slots that render directly on it. Measured live (2026-09-14): the
+# generated banner_dim hit 1.3-1.6:1 and banner_border 1.0-1.1:1 on black —
+# category labels, MCP lines, and panel borders were invisible (Andy's
+# second screenshot). 3.0:1 (WCAG AA for large/UI text) is the floor.
+BLACK_BG_MIN_CONTRAST = 3.0
+
+
+def _contrast_vs_black(hex_color: str) -> float:
+    """WCAG contrast ratio of a color against a pure black background."""
+    return contrast_ratio(hex_color, "#000000")
+
+
+def _ensure_visible_on_black(hex_color: str, min_ratio: float = BLACK_BG_MIN_CONTRAST) -> str:
+    """Lift a color's lightness (hue/sat preserved) until it reads on black.
+
+    The classic-harmony derivation darkens `l - 0.35`/`l - 0.20` with no
+    floor check against the terminal background, so deep bases (asuka
+    #CC0033 → banner_border #1A0006 at 1.0:1) produce slots that vanish.
+    """
+    if _contrast_vs_black(hex_color) >= min_ratio:
+        return hex_color
+    h, s, l = hex_to_hsl(hex_color)
+    lo, hi = l, 1.0
+    # Binary-search the smallest lightness that clears the ratio.
+    for _ in range(24):
+        mid = (lo + hi) / 2
+        cand = hsl_to_hex(h, s, mid)
+        if _contrast_vs_black(cand) >= min_ratio:
+            hi = mid
+        else:
+            lo = mid
+    return hsl_to_hex(h, s, hi)
+
+
 def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = "dark") -> Colors:
     """
     Generate a complete 29-color palette from a single base color.
@@ -196,6 +231,14 @@ def generate_palette(base_hex: str, harmony: str = "complementary", mode: str = 
     dim = hsl_to_hex(h, s * 0.6, max(0.15, l - 0.20))
     bright = hsl_to_hex(h, s, min(0.85, l + 0.25))
     text = hsl_to_hex(h, s * 0.15, 0.90)
+
+    if mode == "dark":
+        # Slots that render directly on the black terminal (panel borders,
+        # input rules, category/toolset labels, muted body text) must clear
+        # BLACK_BG_MIN_CONTRAST — the raw `l - 0.35` / `l - 0.20` derivation
+        # gave 1.0-1.6:1 on black for deep bases (measured 2026-09-14).
+        dark = _ensure_visible_on_black(dark)
+        dim = _ensure_visible_on_black(dim)
 
     if mode == "light":
         # Inverted derivation: near-white tinted surfaces, dark text.
