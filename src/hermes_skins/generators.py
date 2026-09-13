@@ -822,6 +822,402 @@ THEMES: dict[str, dict] = {
             "[#0A0A0E]⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"
         ),
     },
+    "mari": {
+        "base_color": "#E86A9E",
+        "harmony": "analogous",
+        "description": "Mari Illustrious Makinami — rose-pink, cheerful audacity",
+        "agent_name": "EVA-05 Agent",
+        "prompt_symbol": "◉ ❯ ",
+        "response_label": " ◉ EVA-05 ",
+        "waiting_faces": ['(◉)', '(◎)', '(◠)', '(◡)', '(☀)'],
+        "thinking_faces": ['(◉)', '(◠)', '(◎)', '(◡)', '(☀)'],
+        "thinking_verbs": [
+            "calibrating EVA-05",
+            "tuning the goggle HUD",
+            "humming in the entry plug",
+            "checking vertical takeoff",
+            "sniffing out an Angel",
+            "sharing the provisions",
+            "swinging on the cable",
+            "plotting a cheerful descent",
+        ],
+        "wings": [['⟪◉', '◉⟫'], ['⟪◎', '◎⟫'], ['⟪◠', '◠⟫'], ['⟪◡', '◡⟫']],
+        "tool_prefix": "╟",
+        "tool_emojis": {
+            "terminal": "◉",
+            "web_search": "◎",
+            "read_file": "◠",
+            "write_file": "❖",
+            "search_files": "◡",
+            "execute_code": "⌁",
+            "browser_navigate": "⊕",
+            "delegate_task": "▣",
+            "mixture_of_agents": "⚗",
+            "memory": "◐",
+            "clarify": "?",
+            "cronjob": "↻",
+            "process": "⚙",
+            "todo": "☐",
+        },
+        "welcome": "Banzai! Type /help for the fun stuff.",
+        "goodbye": "Mission's a hit! See ya next sortie...",
+        "help_header": "(◉) Cheerful Commands",
+        "banner_logo": (
+            "[bold #C25E8C]███╗   ███╗ █████╗ ██████╗ ██╗[/]\n"
+            "[bold #C25E8C]████╗ ████║██╔══██╗██╔══██╗██║[/]\n"
+            "[bold #C25E8C]██╔████╔██║███████║██████╔╝██║[/]\n"
+            "[bold #C25E8C]██║╚██╔╝██║██╔══██║██╔══██╗██║[/]\n"
+            "[#F5C9DC]██║ ╚═╝ ██║██║  ██║██║  ██║██║[/]\n"
+            "[#F5C9DC]╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝[/]\n"
+            "[#7A3B57]              EVA-05 · MARI · VERTICAL TAKEOFF[/]\n"
+            "[#7A3B57]              \"Banzai! Chomp, chomp...\" — MARI[/]"
+        ),
+        "banner_hero": (
+
+            "[#3D1224]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣶⣿⣿⣿⣶⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#3D1224]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#F5C9DC]⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⡿⠛⠉⠉⠛⢿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#F5C9DC]⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠋⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#F5C9DC]⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#F5C9DC]⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C25E8C]⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C25E8C]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#F5C9DC]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#F5C9DC]⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#3D1224]⠀⠀⠀⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C25E8C]⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"
+        ),
+    },
+    "ritsuko": {
+        "base_color": "#C9973A",
+        "harmony": "complementary",
+        "description": "Ritsuko Akagi — amber laboratory light, Magi caretaker",
+        "agent_name": "Magi Lab",
+        "prompt_symbol": "▤ ❯ ",
+        "response_label": " MAGI LAB ",
+        "waiting_faces": ['(▤)', '(▥)', '(▦)', '(▧)', '(▣)'],
+        "thinking_faces": ['(▤)', '(▩)', '(▦)', '(▣)', '(▥)'],
+        "thinking_verbs": [
+            "running the Magi triad",
+            "compiling Casper's verdict",
+            "cross-checking Melchior",
+            "auditing Balthasar's node",
+            "feeding the cat, quietly",
+            "filing a redacted report",
+            "correlating the dead sea scrolls",
+            "debugging the fifth Angel",
+        ],
+        "wings": [['⟪▤', '▤⟫'], ['⟪▦', '▦⟫'], ['⟪▩', '▩⟫']],
+        "tool_prefix": "┠",
+        "tool_emojis": {
+            "terminal": "▤",
+            "web_search": "◎",
+            "read_file": "▦",
+            "write_file": "◆",
+            "search_files": "▩",
+            "execute_code": "⌁",
+            "browser_navigate": "⊕",
+            "delegate_task": "▣",
+            "mixture_of_agents": "⚗",
+            "memory": "◐",
+            "clarify": "?",
+            "cronjob": "↻",
+            "process": "⚙",
+            "todo": "☐",
+        },
+        "welcome": "Magi nodes online. Type /help for the analysis.",
+        "goodbye": "Analysis archived. Lab lights off.",
+        "help_header": "(▤) Analysis Commands",
+        "banner_logo": (
+            "[bold #B98A3E]██████╗ ██╗████████╗███████╗██╗   ██╗██╗  ██╗ ██████╗[/]\n"
+            "[bold #B98A3E]██╔══██╗██║╚══██╔══╝██╔════╝██║   ██║██║ ██╔╝██╔═══██╗[/]\n"
+            "[bold #B98A3E]██████╔╝██║   ██║   ███████╗██║   ██║█████╔╝ ██║   ██║[/]\n"
+            "[bold #B98A3E]██╔══██╗██║   ██║   ╚════██║██║   ██║██╔═██╗ ██║   ██║[/]\n"
+            "[#EAD9B4]██║  ██║██║   ██║   ███████║╚██████╔╝██║  ██╗╚██████╔╝[/]\n"
+            "[#EAD9B4]╚═╝  ╚═╝╚═╝   ╚═╝   ╚══════╝ ╚═════╝ ╚═╝  ╚═╝ ╚═════╝[/]\n"
+            "[#6E5A2E]              MAGI LAB · RITSUKO · MELCHIOR-2[/]\n"
+            "[#6E5A2E]              \"The truth is always rational.\" — AKAGI[/]"
+        ),
+        "banner_hero": (
+
+            "[#2E2612]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣶⣿⣿⣿⣶⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#2E2612]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#EAD9B4]⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⡿⠛⠉⠉⠛⢿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#EAD9B4]⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠋⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#EAD9B4]⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#EAD9B4]⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#B98A3E]⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#B98A3E]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#EAD9B4]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#EAD9B4]⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#2E2612]⠀⠀⠀⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#B98A3E]⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"
+        ),
+    },
+    "gendo": {
+        "base_color": "#6B4FE0",
+        "harmony": "monochrome",
+        "description": "Commander Ikari — instrumentality violet, glasses gleam",
+        "agent_name": "Commander",
+        "prompt_symbol": "◤ ❯ ",
+        "response_label": " SCENARIO ",
+        "waiting_faces": ['(▤)', '(◼)', '(▬)', '(▰)', '(▱)'],
+        "thinking_faces": ['(◼)', '(▬)', '(▱)', '(▰)', '(▤)'],
+        "thinking_verbs": [
+            "advancing the scenario",
+            "folding the hands",
+            "consulting SEELE's script",
+            "weighing the Spear",
+            "watching Yui's window",
+            "silencing the bridge",
+            "judging the pilots",
+            "waiting at the altar",
+        ],
+        "wings": [['⟪◼', '◼⟫'], ['⟪▬', '▬⟫'], ['⟪▤', '▤⟫']],
+        "tool_prefix": "╠",
+        "tool_emojis": {
+            "terminal": "◼",
+            "web_search": "◉",
+            "read_file": "▬",
+            "write_file": "▰",
+            "search_files": "▱",
+            "execute_code": "⌁",
+            "browser_navigate": "⊕",
+            "delegate_task": "▣",
+            "mixture_of_agents": "⚗",
+            "memory": "◐",
+            "clarify": "?",
+            "cronjob": "↻",
+            "process": "⚙",
+            "todo": "☐",
+        },
+        "welcome": "The scenario proceeds. Type /help.",
+        "goodbye": "Everything is proceeding as planned.",
+        "help_header": "(◼) Command Deck",
+        "banner_logo": (
+            "[bold #6B5CB8] ██████╗ ███████╗███╗   ██╗██████╗  ██████╗[/]\n"
+            "[bold #6B5CB8]██╔════╝ ██╔════╝████╗  ██║██╔══██╗██╔═══██╗[/]\n"
+            "[bold #6B5CB8]██║  ███╗█████╗  ██╔██╗ ██║██║  ██║██║   ██║[/]\n"
+            "[bold #6B5CB8]██║   ██║██╔══╝  ██║╚██╗██║██║  ██║██║   ██║[/]\n"
+            "[#D9D4EE]╚██████╔╝███████╗██║ ╚████║██████╔╝╚██████╔╝[/]\n"
+            "[#D9D4EE] ╚═════╝ ╚══════╝╚═╝  ╚═══╝╚═════╝  ╚═════╝[/]\n"
+            "[#3E3568]              COMMAND DECK · GENDO · SCENARIO[/]\n"
+            "[#3E3568]              \"Everything is proceeding as planned.\" — IKARI[/]"
+        ),
+        "banner_hero": (
+
+            "[#191233]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣶⣿⣿⣿⣶⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#191233]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D9D4EE]⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⡿⠛⠉⠉⠛⢿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D9D4EE]⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠋⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D9D4EE]⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D9D4EE]⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#6B5CB8]⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#6B5CB8]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D9D4EE]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D9D4EE]⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#191233]⠀⠀⠀⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#6B5CB8]⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"
+        ),
+    },
+    "kaji": {
+        "base_color": "#4FA66B",
+        "harmony": "split_comp",
+        "description": "Ryoji Kaji — watermelon patch green, laid-back truth seeker",
+        "agent_name": "Kaji's Field",
+        "prompt_symbol": "⊰ ❯ ",
+        "response_label": " INSPECTOR ",
+        "waiting_faces": ['(❦)', '(✿)', '(❀)', '(❁)', '(◍)'],
+        "thinking_faces": ['(❦)', '(✿)', '(❁)', '(❀)', '(◍)'],
+        "thinking_verbs": [
+            "watering the patch",
+            "peeling the secret file",
+            "dangling the thread",
+            "humming by the river",
+            "digging up the truth",
+            "sharpening the crossblade",
+            "leaving a voicemail",
+            "watching the sunset",
+        ],
+        "wings": [['⟪✿', '✿⟫'], ['⟪❀', '❀⟫'], ['⟪◍', '◍⟫']],
+        "tool_prefix": "╾",
+        "tool_emojis": {
+            "terminal": "❦",
+            "web_search": "◎",
+            "read_file": "❧",
+            "write_file": "✾",
+            "search_files": "❥",
+            "execute_code": "⌁",
+            "browser_navigate": "⊕",
+            "delegate_task": "▣",
+            "mixture_of_agents": "⚗",
+            "memory": "◐",
+            "clarify": "?",
+            "cronjob": "↻",
+            "process": "⚙",
+            "todo": "☐",
+        },
+        "welcome": "Patch is watered. Type /help.",
+        "goodbye": "The rest is up to you...",
+        "help_header": "(❦) Field Notes",
+        "banner_logo": (
+            "[bold #4E9A67]██╗  ██╗ █████╗      ██╗██╗[/]\n"
+            "[bold #4E9A67]██║ ██╔╝██╔══██╗     ██║██║[/]\n"
+            "[bold #4E9A67]█████╔╝ ███████║     ██║██║[/]\n"
+            "[bold #4E9A67]██╔═██╗ ██╔══██║██   ██║██║[/]\n"
+            "[#C4E2CF]██║  ██╗██║  ██║╚█████╔╝██║[/]\n"
+            "[#C4E2CF]╚═╝  ╚═╝╚═╝  ╚═╝ ╚════╝ ╚═╝[/]\n"
+            "[#2C5A3C]              FIELD PATCH · KAJI · WATERMELON[/]\n"
+            "[#2C5A3C]              \"The rest is up to you.\" — KAJI[/]"
+        ),
+        "banner_hero": (
+
+            "[#12271A]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣶⣿⣿⣿⣶⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#12271A]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C4E2CF]⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⡿⠛⠉⠉⠛⢿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C4E2CF]⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠋⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C4E2CF]⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C4E2CF]⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#4E9A67]⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#4E9A67]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C4E2CF]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#C4E2CF]⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#12271A]⠀⠀⠀⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#4E9A67]⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"
+        ),
+    },
+    "lilith": {
+        "base_color": "#9FD8E8",
+        "harmony": "monochrome",
+        "description": "Lilith — pale first ancestor, silent instrumentality",
+        "agent_name": "First Ancestral",
+        "prompt_symbol": "◇ ❯ ",
+        "response_label": " LILITH ",
+        "waiting_faces": ['(◌)', '(○)', '(◯)', '(◎)', '(⊙)'],
+        "thinking_faces": ['(◌)', '(◯)', '(○)', '(⊙)', '(⊚)'],
+        "thinking_verbs": [
+            "seeding the black moon",
+            "bleeding the fruit",
+            "listening to no one",
+            "sheltering the souls",
+            "unfolding the wings",
+            "resonating with Adam",
+            "weaving the sea of LCL",
+            "waiting at Terminal Dogma",
+        ],
+        "wings": [['⟪◌', '◌⟫'], ['⟪◯', '◯⟫'], ['⟪⊙', '⊙⟫']],
+        "tool_prefix": "│",
+        "tool_emojis": {
+            "terminal": "◌",
+            "web_search": "○",
+            "read_file": "◍",
+            "write_file": "◎",
+            "search_files": "⊙",
+            "execute_code": "⌁",
+            "browser_navigate": "⊕",
+            "delegate_task": "▣",
+            "mixture_of_agents": "⚗",
+            "memory": "◐",
+            "clarify": "?",
+            "cronjob": "↻",
+            "process": "⚙",
+            "todo": "☐",
+        },
+        "welcome": "The egg is still. Type /help.",
+        "goodbye": "Returning to the sea of LCL...",
+        "help_header": "(◌) Instrumentality",
+        "banner_logo": (
+            "[bold #5F93A4]██╗     ██╗██╗     ██╗████████╗██╗  ██╗[/]\n"
+            "[bold #5F93A4]██║     ██║██║     ██║╚══██╔══╝██║  ██║[/]\n"
+            "[bold #5F93A4]██║     ██║██║     ██║   ██║   ███████║[/]\n"
+            "[bold #5F93A4]██║     ██║██║     ██║   ██║   ██╔══██║[/]\n"
+            "[#D6ECF3]███████╗██║███████╗██║   ██║   ██║  ██║[/]\n"
+            "[#D6ECF3]╚══════╝╚═╝╚══════╝╚═╝   ╚═╝   ╚═╝  ╚═╝[/]\n"
+            "[#2E4A55]              TERMINAL DOGMA · LILITH · FIRST ANCESTOR[/]\n"
+            "[#2E4A55]              \"...the first ancestor.\" — LILITH[/]"
+        ),
+        "banner_hero": (
+
+            "[#16323D]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣶⣿⣿⣿⣶⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#16323D]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D6ECF3]⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⡿⠛⠉⠉⠛⢿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D6ECF3]⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠋⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D6ECF3]⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D6ECF3]⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#5F93A4]⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#5F93A4]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D6ECF3]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#D6ECF3]⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#16323D]⠀⠀⠀⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#5F93A4]⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"
+        ),
+    },
+    "magi": {
+        "base_color": "#8A5CF5",
+        "harmony": "triadic",
+        "description": "The Magi System — Melchior, Balthasar, Casper in conclave",
+        "agent_name": "MAGI CONCLAVE",
+        "prompt_symbol": "⬢ ❯ ",
+        "response_label": " MAGI ",
+        "waiting_faces": ['(⬢)', '(⬡)', '(⬣)', '(△)', '(▽)'],
+        "thinking_faces": ['(⬢)', '(⬣)', '(⬡)', '(△)', '(▽)'],
+        "thinking_verbs": [
+            "polling Melchior",
+            "polling Balthasar",
+            "polling Casper",
+            "casting the majority",
+            "weighing objection A-801",
+            "simulating the bargain",
+            "tallying the three answers",
+            "rendering the verdict",
+        ],
+        "wings": [['⟪⬢', '⬢⟫'], ['⟪⬣', '⬣⟫'], ['⟪△', '△⟫']],
+        "tool_prefix": "╿",
+        "tool_emojis": {
+            "terminal": "⬢",
+            "web_search": "◎",
+            "read_file": "⬡",
+            "write_file": "⬣",
+            "search_files": "△",
+            "execute_code": "⌁",
+            "browser_navigate": "⊕",
+            "delegate_task": "▣",
+            "mixture_of_agents": "⚗",
+            "memory": "◐",
+            "clarify": "?",
+            "cronjob": "↻",
+            "process": "⚙",
+            "todo": "☐",
+        },
+        "welcome": "Three nodes concur. Type /help.",
+        "goodbye": "Deliberation closed. Answer recorded.",
+        "help_header": "(⬢) Deliberation Commands",
+        "banner_logo": (
+            "[bold #6B4CC4]███╗   ███╗ █████╗  ██████╗ ██╗[/]\n"
+            "[bold #6B4CC4]████╗ ████║██╔══██╗██╔════╝ ██║[/]\n"
+            "[bold #6B4CC4]██╔████╔██║███████║██║  ███╗██║[/]\n"
+            "[bold #6B4CC4]██║╚██╔╝██║██╔══██║██║   ██║██║[/]\n"
+            "[#CFC5F2]██║ ╚═╝ ██║██║  ██║╚██████╔╝██║[/]\n"
+            "[#CFC5F2]╚═╝     ╚═╝╚═╝  ╚═╝ ╚═════╝ ╚═╝[/]\n"
+            "[#443486]              MAGI · MELCHIOR·BALTHASAR·CASPER[/]\n"
+            "[#443486]              \"Question. Answer. Question.\" — MAGI[/]"
+        ),
+        "banner_hero": (
+
+            "[#1E1440]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢀⣠⣴⣶⣿⣿⣿⣶⣦⣄⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#1E1440]⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣶⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣿⣦⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#CFC5F2]⠀⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⣿⡿⠛⠉⠉⠛⢿⣿⣿⣿⣿⣿⣆⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#CFC5F2]⠀⠀⠀⠀⠀⠀⠀⠀⣼⣿⣿⣿⠋⠀⠀⠀⠀⠀⠀⠀⠙⣿⣿⣿⣧⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#CFC5F2]⠀⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀⠘⣿⣿⣿⡄⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#CFC5F2]⠀⠀⠀⠀⠀⠀⣸⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⢿⣿⣿⣿⡆⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#6B4CC4]⠀⠀⠀⠀⠀⢀⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#6B4CC4]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣿⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#CFC5F2]⠀⠀⠀⠀⠀⢸⣿⣿⣿⣷⣄⠀⠀⠀⠀⠀⠀⠀⠀⠀⣠⣿⣿⣿⣿⡇⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#CFC5F2]⠀⠀⠀⠀⠀⠘⣿⣿⣿⣿⣿⣦⣀⠀⠀⠀⠀⠀⠀⣀⣴⣿⣿⣿⣿⠃⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#1E1440]⠀⠀⠀⠀⠀⠀⠻⣿⣿⣿⣿⣿⣿⣿⣷⣶⣶⣶⣶⣿⣿⣿⣿⣿⣿⠟⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]\n"
+            "[#6B4CC4]⠀⠀⠀⠀⠀⠀⠀⠉⠛⠻⠿⠿⠿⠿⠿⠿⠿⠿⠿⠿⠟⠛⠉⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀⠀[/]"
+        ),
+    },
 }
 
 # Default tool emojis for random/custom generation

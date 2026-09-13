@@ -205,19 +205,20 @@ def test_random_palettes_20_seeds_aa():
 # Templates
 # ---------------------------------------------------------------------------
 
-def test_list_templates_returns_8():
-    assert len(list_templates()) == 8
+def test_list_templates_returns_14():
+    assert len(list_templates()) == 14
 
 
 def test_all_template_names_listed():
     assert set(list_templates()) == {
         "asuka", "rei", "shinji", "misato", "kaoru", "nerv", "berserk", "seele",
+        "mari", "ritsuko", "gendo", "kaji", "lilith", "magi",
     }
 
 
 def test_unknown_template_raises():
     with pytest.raises(ValueError, match="Unknown template"):
-        generate_from_template("gendo")
+        generate_from_template("nerv-hq")
 
 
 @pytest.mark.parametrize("name", sorted(THEMES))

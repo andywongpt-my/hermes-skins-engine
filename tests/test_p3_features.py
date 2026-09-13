@@ -303,7 +303,7 @@ class TestWcag:
         assert all(p.get("hard") or p["pass"] or "suggest" in p for p in d["pairs"])
 
     def test_wcag_unknown_skin(self, runner, isolated_home):
-        result = runner.invoke(app, ["wcag", "gendo"])
+        result = runner.invoke(app, ["wcag", "nagisa-shrine"])
         assert result.exit_code == 1
         assert "not found" in result.output
 

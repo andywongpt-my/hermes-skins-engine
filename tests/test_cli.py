@@ -28,10 +28,10 @@ def test_version_command(runner):
     assert f"hermes-skins v{__version__}" in result.output
 
 
-def test_templates_command_lists_8(runner):
+def test_templates_command_lists_14(runner):
     result = runner.invoke(app, ["templates"])
     assert result.exit_code == 0
-    assert "Built-in templates (8)" in result.output
+    assert "Built-in templates (14)" in result.output
     for name in ("asuka", "seele", "berserk"):
         assert name in result.output
 
@@ -66,7 +66,7 @@ def test_generate_to_output_file(runner, tmp_path):
 
 
 def test_generate_unknown_template_fails_cleanly(runner, tmp_path):
-    result = runner.invoke(app, ["generate", "gendo", "-o", str(tmp_path / "x.yaml")])
+    result = runner.invoke(app, ["generate", "nagisa-shrine", "-o", str(tmp_path / "x.yaml")])
     assert result.exit_code == 1
     assert "Unknown template" in result.output
 
@@ -142,14 +142,14 @@ def test_preview_template_fallback(runner, isolated_home):
     assert "SEELE" in result.output
 
 
-def test_preview_all_flag_dumps_8(runner):
+def test_preview_all_flag_dumps_14(runner):
     result = runner.invoke(app, ["preview", "--all"])
     assert result.exit_code == 0
-    assert result.output.count("Color Palette:") == 8
+    assert result.output.count("Color Palette:") == 14
 
 
 def test_preview_unknown_name(runner, isolated_home):
-    result = runner.invoke(app, ["preview", "gendo"])
+    result = runner.invoke(app, ["preview", "nagisa-shrine"])
     assert result.exit_code == 1
     assert "not found" in result.output
 
@@ -305,7 +305,7 @@ def test_export_installed_skin(runner, isolated_home, tmp_path):
 
 
 def test_export_unknown_fails(runner, isolated_home):
-    result = runner.invoke(app, ["export", "gendo"])
+    result = runner.invoke(app, ["export", "nagisa-shrine"])
     assert result.exit_code == 1
 
 
