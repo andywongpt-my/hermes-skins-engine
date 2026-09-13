@@ -221,8 +221,15 @@ class TestBannerSync:
         # Extract hexes from banner art
         art_hexes = set(re.findall(r"#([0-9a-fA-F]{6})", skin.banner_logo))
         palette_hexes = {v.lstrip("#").upper() for v in skin.colors.to_dict().values()}
-        # Every art hex must now come from the palette
-        assert art_hexes <= palette_hexes, f"art hexes {art_hexes} not in palette"
+        # Every art hex must come from the palette OR be a visibility lift of
+        # a palette color (banner colors are clamped to BANNER_MIN_LIGHTNESS
+        # so nothing vanishes on a black terminal background).
+        from hermes_skins.generators import _ensure_dark_visible
+
+        allowed = palette_hexes | {
+            _ensure_dark_visible("#" + h).lstrip("#").upper() for h in palette_hexes
+        }
+        assert art_hexes <= allowed, f"art hexes {art_hexes} not in palette"
 
     def test_sync_preserves_tag_structure(self):
         art = "[bold #111111]AAA[/]\n[#EEEEEE]BBB[/]"
@@ -244,6 +251,8 @@ class TestBannerSync:
         assert sync_banner_art("no tags here", colors) == "no tags here"
 
     def test_all_templates_synced(self):
+        from hermes_skins.generators import _ensure_dark_visible
+
         for t in THEMES:
             skin = generate_from_template(t)
             for art in (skin.banner_logo, skin.banner_hero):
@@ -251,7 +260,11 @@ class TestBannerSync:
                     continue
                 art_hexes = set(re.findall(r"#([0-9a-fA-F]{6})", art))
                 palette_hexes = {v.lstrip("#").upper() for v in skin.colors.to_dict().values()}
-                assert art_hexes <= palette_hexes, f"{t}: art {art_hexes} ∉ palette"
+                allowed = palette_hexes | {
+                    _ensure_dark_visible("#" + h).lstrip("#").upper()
+                    for h in palette_hexes
+                }
+                assert art_hexes <= allowed, f"{t}: art {art_hexes} ∉ palette"
 
 
 # ---------------------------------------------------------------------------

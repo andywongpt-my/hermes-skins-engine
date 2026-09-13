@@ -344,6 +344,28 @@ def _hex_lightness(hex_color: str) -> float:
         return -1.0  # malformed colors sort first and are left untouched
 
 
+# Minimum HSL lightness for any color painted on the banner. The terminal
+# background is near-black; colors below this vanish into it (seen live:
+# asuka logo half invisible because its darkest art color mapped to
+# banner_border #1A0006, L=0.06). HSL lightness is a poor proxy for perceived
+# brightness — saturated blue/violet at L=0.40 still measures luminance
+# ~50/255 (#391FAD, #420CC0). 0.52 is the level where every hue clears
+# perceived-luminance 60/255 on black.
+BANNER_MIN_LIGHTNESS = 0.52
+
+
+def _ensure_dark_visible(hex_color: str) -> str:
+    """Lift a color's lightness to BANNER_MIN_LIGHTNESS if it's too dark for a
+    black terminal background. Hue and saturation preserved."""
+    try:
+        h, s, l = hex_to_hsl(hex_color)
+    except ValueError:
+        return hex_color
+    if l >= BANNER_MIN_LIGHTNESS:
+        return hex_color
+    return hsl_to_hex(h, s, BANNER_MIN_LIGHTNESS)
+
+
 def sync_banner_art(art: str, colors) -> str:
     """Re-color a banner art string to match the generated palette (F9).
 
@@ -352,6 +374,9 @@ def sync_banner_art(art: str, colors) -> str:
     re-mapped onto palette roles: darkest -> banner_border, lightest ->
     banner_text, the middle(s) -> banner_accent (hue-preserved from the base).
     Rich tag structure ([bold #HEX]…[/] / [#HEX]…[/]) is preserved exactly.
+    After mapping, every color is checked against BANNER_MIN_LIGHTNESS —
+    dark palette roles (banner_border) get lifted so the art stays visible on
+    the black terminal background.
     """
     if not art or "[" not in art:
         return art
@@ -376,6 +401,7 @@ def sync_banner_art(art: str, colors) -> str:
     def _sub(m: re.Match) -> str:
         bold, hx = m.group(1), m.group(2)
         new = mapping.get(hx, hx)
+        new = _ensure_dark_visible(new)
         return f"[{bold.strip() + ' ' if bold else ''}{new}]"
 
     return re.sub(r"\[(bold\s+)?(#[0-9a-fA-F]{6})\]", _sub, art)

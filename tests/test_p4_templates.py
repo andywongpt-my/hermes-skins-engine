@@ -50,8 +50,12 @@ def test_p4_banner_art_synced(name):
     palette_hexes = set(skin.colors.to_dict().values())
     art = (skin.banner_logo or "") + (skin.banner_hero or "")
     art_hexes = set(re.findall(r"\[(?:bold )?(#[0-9A-Fa-f]{6})\]", art))
-    orphan = art_hexes - palette_hexes
-    # Every distinct art hex must exist in the palette (sync_banner_art contract)
+    # Sync maps art colors onto palette roles, then lifts any color too dark
+    # for the black terminal background (BANNER_MIN_LIGHTNESS). Accept either.
+    from hermes_skins.generators import _ensure_dark_visible
+
+    allowed = palette_hexes | {_ensure_dark_visible(h) for h in palette_hexes}
+    orphan = art_hexes - allowed
     assert not orphan, f"{name}: art colors {orphan} missing from palette"
 
 
